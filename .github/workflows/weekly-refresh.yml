@@ -1,0 +1,40 @@
+name: Weekly Dashboard Refresh
+
+on:
+  schedule:
+    - cron: '0 11 * * 1'  # toda segunda, 08:00 BRT (UTC-3, sem horário de verão)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r scripts/requirements.txt
+
+      - name: Run weekly refresh
+        env:
+          METABASE_URL: ${{ secrets.METABASE_URL }}
+          METABASE_USERNAME: ${{ secrets.METABASE_USERNAME }}
+          METABASE_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PAGES_URL: ${{ vars.PAGES_URL }}
+          SLACK_MENTION_ON_ERROR: '<@U0753LAQU1F>'
+        run: python scripts/weekly_refresh.py
+
+      - name: Commit updated dashboard
+        run: |
+          git config user.name "mp-agencia-bot"
+          git config user.email "actions@github.com"
+          git add docs/index.html data/cache/historical_data.json
+          git diff --cached --quiet || git commit -m "Refresh dashboard $(date -u +%F)"
+          git push
