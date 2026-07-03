@@ -3,7 +3,13 @@ name: Weekly Dashboard Refresh
 on:
   schedule:
     - cron: '0 13 * * 1' # toda segunda, 10:00 BRT (UTC-3, sem horário de verão)
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: 'Modo teste: envia só pro meu DM no Slack, sem @channel'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -27,6 +33,8 @@ jobs:
           METABASE_USERNAME: ${{ secrets.METABASE_USERNAME }}
           METABASE_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL_TEST: ${{ secrets.SLACK_WEBHOOK_URL_TEST }}
+          TEST_MODE: ${{ inputs.test_mode }}
           PAGES_URL: ${{ vars.PAGES_URL }}
           SLACK_MENTION_ON_ERROR: '<@U0753LAQU1F>'
         run: python scripts/weekly_refresh.py

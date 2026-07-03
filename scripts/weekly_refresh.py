@@ -32,9 +32,16 @@ import requests
 METABASE_URL = os.environ["METABASE_URL"].rstrip("/")
 METABASE_USERNAME = os.environ["METABASE_USERNAME"]
 METABASE_PASSWORD = os.environ["METABASE_PASSWORD"]
-SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
 PAGES_URL = os.environ.get("PAGES_URL", "")
 SLACK_MENTION_ON_ERROR = os.environ.get("SLACK_MENTION_ON_ERROR", "")  # ex: <@U0753LAQU1F>
+
+# Modo teste: manda tudo só pro DM do Pedro, sem @channel. Só liga via input
+# manual do workflow_dispatch — o cron de segunda nunca ativa isso.
+TEST_MODE = os.environ.get("TEST_MODE", "").strip().lower() == "true"
+if TEST_MODE:
+    SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL_TEST"]
+else:
+    SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
 
 DATABASE_ID = 69
 
@@ -464,10 +471,12 @@ def main():
     # ── Slack ─────────────────────────────────────────────────────────────
 
     link_line = f"\n{PAGES_URL}\n" if PAGES_URL else "\n"
+    prefix = "🧪 [TESTE — só você vê isso]\n" if TEST_MODE else ""
+    channel_mention = "" if TEST_MODE else "\n<!channel>"
     slack_post(
-        f"📊 Dashboard MP Agência — Funil Ads-to-Sale ({cover})\n"
+        f"{prefix}📊 Dashboard MP Agência — Funil Ads-to-Sale ({cover})\n"
         f"Dados atualizados com snapshot de {cover}. Acesse o dashboard interativo:"
-        f"{link_line}\n<!channel>"
+        f"{link_line}{channel_mention}"
     )
 
 
@@ -476,7 +485,8 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         try:
-            slack_post(f"⚠️ Problema no refresh automático do dashboard MP Agência: {e} "
+            prefix = "🧪 [TESTE] " if TEST_MODE else ""
+            slack_post(f"{prefix}⚠️ Problema no refresh automático do dashboard MP Agência: {e} "
                        f"{SLACK_MENTION_ON_ERROR} verifica?")
         except Exception:
             pass
