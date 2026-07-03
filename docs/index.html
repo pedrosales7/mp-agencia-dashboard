@@ -553,7 +553,7 @@ function renderKPIs() {
   setKpiHtml('kpi-rate',   fmtPct(totals.rate),    deltaSpan(totals.rate,    prev.rate,    'up_good'));
   document.getElementById('kpi-invest-sub').textContent = `Bruto ${fmtBRL(totals.bruto)} · Cashback ${fmtBRL(totals.cashback)}`;
   if (!state.canal) {
-    const base = rowsForPeriod();
+    const base = rowsForPeriod().filter(r => partnerMatch(r.id_mp));
     const g = aggregate(base.filter(r => r.canal === 'google'));
     const m = aggregate(base.filter(r => r.canal === 'meta'));
     document.getElementById('kpi-leads-sub').textContent  = `G ${fmtNum(g.leads)} · M ${fmtNum(m.leads)}`;
