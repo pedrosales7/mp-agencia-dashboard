@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>MP Agência — Funil Ads-to-Sale</title>
+<style>
+:root { color-scheme: light; --bg: #fafafa; --card: #ffffff; --text: #18181b; --muted: #71717a; --border: #e4e4e7; --accent: #2563eb; --google: #4285f4; --meta: #7c3aed; --warn: #f59e0b; --danger: #dc2626; --success: #16a34a; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 20px; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+h1 { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+.subtitle { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+.snapshot-info { display: inline-flex; align-items: center; gap: 8px; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 6px; }
+.snapshot-info.fresh   { background: #dcfce7; color: #15803d; }
+.snapshot-info.aging   { background: #fef3c7; color: #92400e; }
+.snapshot-info.stale   { background: #fee2e2; color: #991b1b; }
+.filters { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; padding: 12px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; }
+.filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filter-group label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+.btn-group { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.btn-group button { padding: 6px 12px; border: 0; background: var(--card); color: var(--text); cursor: pointer; font-size: 13px; transition: background 0.1s; border-right: 1px solid var(--border); }
+.btn-group button:last-child { border-right: 0; }
+.btn-group button:hover { background: #f4f4f5; }
+.btn-group button[aria-pressed="true"] { background: var(--accent); color: white; }
+.btn-group.months button { font-variant-numeric: tabular-nums; }
+select.filter-select { padding: 6px 28px 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font-size: 13px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2371717a' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; }
+select.filter-select:hover { border-color: var(--muted); }
+select.filter-select[data-active="true"] { background-color: var(--accent); color: white; border-color: var(--accent); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>"); }
+.custom-date-group { display: inline-flex; align-items: center; gap: 6px; }
+input[type="date"].filter-select { padding: 5px 10px; }
+.partner-multiselect { position: relative; display: inline-block; }
+#partner-ms-toggle { border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font-size: 13px; cursor: pointer; padding: 6px 12px; }
+#partner-ms-toggle:hover { background: #f4f4f5; }
+#partner-ms-toggle[data-active="true"] { background-color: var(--accent); color: white; border-color: var(--accent); }
+.partner-ms-panel { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); min-width: 180px; }
+.partner-ms-item { display: flex; align-items: center; gap: 6px; padding: 4px 2px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.partner-ms-item input { cursor: pointer; }
+
+.refresh-btn { margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; border-radius: 8px; font-size: 13px; }
+.refresh-btn:hover { background: #f4f4f5; }
+.kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; margin-bottom: 6px; }
+.kpi-value { font-size: 22px; font-weight: 500; line-height: 1.1; }
+.kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; min-height: 14px; }
+.section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.section h2 { font-size: 15px; font-weight: 500; margin: 0; display: flex; align-items: center; gap: 8px; }
+.canal-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.canal-tag.google { background: #dbeafe; color: #1e40af; }
+.canal-tag.meta   { background: #ede9fe; color: #5b21b6; }
+.chart-container { position: relative; height: 280px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 8px 10px; font-weight: 500; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; white-space: nowrap; }
+th.num-h { text-align: right; }
+th:hover { color: var(--text); }
+th.sort-asc::after { content: " ▲"; font-size: 9px; }
+th.sort-desc::after { content: " ▼"; font-size: 9px; }
+td { padding: 10px; border-bottom: 1px solid #f4f4f5; white-space: nowrap; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.cell-volume { font-weight: 500; }
+.cell-conv { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; font-weight: 400; }
+.cell-bad  { background: #fef2f2; }
+.cell-good { background: #f0fdf4; }
+.cell-bad  .cell-volume,  .cell-bad .cell-conv  { color: #b91c1c; }
+.cell-good .cell-volume,  .cell-good .cell-conv { color: #15803d; }
+.cell-delta { display: block; font-size: 10px; margin-top: 2px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.cell-delta.up   { color: #15803d; }
+.cell-delta.down { color: #b91c1c; }
+.cell-delta.flat { color: var(--muted); }
+.toggle-btn { padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); cursor: pointer; font-size: 13px; }
+.toggle-btn:hover { background: #f4f4f5; }
+.toggle-btn[data-active="true"] { background: var(--accent); color: white; border-color: var(--accent); }
+.alert-legend { display: flex; gap: 12px; align-items: center; font-size: 11px; color: var(--muted); margin-top: 8px; }
+.alert-legend .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
+.alert-legend .swatch.bad  { background: #fef2f2; border: 1px solid #fecaca; }
+.alert-legend .swatch.good { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.canal-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+.canal-badge.canal-google { background: #dbeafe; color: #1e40af; }
+.canal-badge.canal-meta   { background: #ede9fe; color: #5b21b6; }
+.warn-row td { background: #fffbeb; }
+.note { font-size: 12px; color: var(--muted); margin-top: 8px; font-style: italic; }
+.partner-cell { font-weight: 500; }
+.tip { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--border); color: var(--muted); font-size: 10px; cursor: help; position: relative; margin-left: 6px; font-weight: 600; font-family: -apple-system, sans-serif; text-transform: none; letter-spacing: 0; }
+.tip:hover { background: var(--muted); color: white; }
+.tip:hover .tip-content { display: block; }
+.tip-content { display: none; position: absolute; top: 100%; left: 0; background: #18181b; color: #f4f4f5; padding: 12px 14px; border-radius: 8px; font-size: 12px; line-height: 1.6; width: 360px; max-width: 90vw; z-index: 100; box-shadow: 0 4px 16px rgba(0,0,0,0.18); margin-top: 8px; font-weight: 400; text-transform: none; letter-spacing: 0; white-space: normal; text-align: left; }
+.tip-content code { background: #27272a; color: #d4d4d8; padding: 1px 5px; border-radius: 3px; font-size: 11px; font-family: ui-monospace, monospace; }
+.tip-content strong { font-weight: 600; color: white; }
+.tip-content ul { margin: 4px 0; padding-left: 16px; }
+.tip-content li { margin: 3px 0; }
+.tip-content hr { border: 0; border-top: 1px solid #3f3f46; margin: 8px 0; }
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px)  { .kpis { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<h1>MP Agência — Funil Ads-to-Sale <span class="snapshot-info" id="snapshot-time">snapshot</span></h1>
+<div class="subtitle">Atribuição pelo anunciante. Investimento via <code>performance_partner_mp_agency</code>; eventos via <code>comparison.*</code> + <code>whatsapp_assistant.*</code>; leads/vendas via <code>checkout.lead_detail</code>. CPL/CAC sobre líquido.</div>
+
+<div class="filters">
+  <div class="filter-group">
+    <label>Período</label>
+    <div class="btn-group" id="period-group">
+      <button data-period="7d">7d</button>
+      <button data-period="30d" aria-pressed="true">30d</button>
+      <button data-period="90d">90d</button>
+    </div>
+    <select id="month-select" class="filter-select">
+      <option value="">Mês…</option>
+      <option value="2026-06">jun/26</option>
+      <option value="2026-05">mai/26</option>
+      <option value="2026-04">abr/26</option>
+      <option value="2026-03">mar/26</option>
+      <option value="2026-02">fev/26</option>
+    </select>
+    <span class="custom-date-group" id="custom-date-group">
+      <input type="date" id="custom-date-start" class="filter-select" style="padding:6px 10px;" title="Data inicial (personalizado)">
+      <span style="color:var(--muted);font-size:12px;">até</span>
+      <input type="date" id="custom-date-end" class="filter-select" style="padding:6px 10px;" title="Data final (personalizado)">
+    </span>
+  </div>
+  <div class="filter-group">
+    <label>Canal</label>
+    <div class="btn-group" id="canal-group">
+      <button data-canal="" aria-pressed="true">Todos</button>
+      <button data-canal="google">Google</button>
+      <button data-canal="meta">Meta</button>
+    </div>
+  </div>
+  <div class="filter-group">
+    <label>Partner</label>
+    <div class="partner-multiselect" id="partner-multiselect">
+      <button type="button" class="filter-select" id="partner-ms-toggle" data-active="false">Todos ▾</button>
+      <div class="partner-ms-panel" id="partner-ms-panel" hidden>
+        <label class="partner-ms-item partner-ms-all"><input type="checkbox" id="partner-ms-clear"> <strong>Todos</strong></label>
+        <hr style="border:none;border-top:1px solid var(--border);margin:4px 0;">
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="loga-internet"> Loga</label>
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="the fiber internet"> The Fiber</label>
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="interplus internet"> Interplus</label>
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="direct internet"> Direct</label>
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="enove-fibra"> Enove</label>
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="unifique"> Unifique</label>
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="ultranet-network"> Ultranet</label>
+        <label class="partner-ms-item"><input type="checkbox" class="partner-ms-cb" value="ativa-telecom"> Ativa Telecom</label>
+      </div>
+    </div>
+  </div>
+  <div class="filter-group">
+    <label>Comparar</label>
+    <button class="toggle-btn" id="compare-toggle" data-active="false">Δ vs período anterior</button>
+  </div>
+  <button class="refresh-btn" id="refresh-btn">ℹ Snapshot 02/07/26</button>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">Investimento líquido<span class="tip">i<span class="tip-content"><strong>Líquido = Bruto − Cashback</strong><br>Fonte: <code>midia_paga.performance_partner_mp_agency</code><br>• <code>bruto</code> = SUM(<code>raw_investment</code>)<br>• <code>cashback</code> = SUM(<code>cashback</code>)<br>• <code>liquido</code> = SUM(<code>partnership_net_daily_spend</code>)<br>Filtro: <code>source IN ('google','meta')</code> agregado por (partnership_id × período).</span></span></div><div class="kpi-value" id="kpi-invest">—</div><div class="kpi-sub" id="kpi-invest-sub">&nbsp;</div></div>
+  <div class="kpi"><div class="kpi-label">Leads produtivos<span class="tip">i<span class="tip-content"><strong>Filtros aplicados:</strong><ul><li><code>source IN ('google','whatsapp')</code></li><li><code>lead_accepted = true</code></li><li><code>partner_id_partner = id_mp</code> do anunciante (só conta o lead que ficou com o partner que pagou)</li></ul><strong>Atribuição:</strong><ul><li>Google: via <code>lead_detail.campaign</code> ↔ <code>config.utm_campaign</code></li><li>Meta: via <code>wa_chat_start.user_id</code> ↔ <code>lead_detail.user_id</code> (janela 7d antes do lead)</li></ul>Exclui <code>whatsapp:paid</code> e Desktop.</span></span></div><div class="kpi-value" id="kpi-leads">—</div><div class="kpi-sub" id="kpi-leads-sub">&nbsp;</div></div>
+  <div class="kpi"><div class="kpi-label">Vendas<span class="tip">i<span class="tip-content"><strong>Definição de venda:</strong><br><code>current_situation IN ('sold','installed','scheduled')</code><br><br>Mesmos filtros do lead produtivo (inclui <code>partner_id_partner = id_mp</code> do anunciante).<br><br>Não contam: <code>created</code>, <code>lost</code>, <code>negotiating</code>, <code>duplicated</code>, <code>test</code>, <code>not_identified</code>.</span></span></div><div class="kpi-value" id="kpi-vendas">—</div><div class="kpi-sub" id="kpi-vendas-sub">&nbsp;</div></div>
+  <div class="kpi"><div class="kpi-label">CPL líq.<span class="tip">i<span class="tip-content"><strong>CPL = Investimento líquido / Leads produtivos</strong><br><br>Mede o custo real (depois de descontar cashback) por lead que ficou com o partner anunciante.</span></span></div><div class="kpi-value" id="kpi-cpl">—</div><div class="kpi-sub">por lead produtivo</div></div>
+  <div class="kpi"><div class="kpi-label">CAC líq.<span class="tip">i<span class="tip-content"><strong>CAC = Investimento líquido / Vendas</strong><br><br>Custo de aquisição efetivo. Quando vendas=0, exibe "—".</span></span></div><div class="kpi-value" id="kpi-cac">—</div><div class="kpi-sub">por venda</div></div>
+  <div class="kpi"><div class="kpi-label">Lead → Venda<span class="tip">i<span class="tip-content"><strong>Taxa = Vendas / Leads produtivos</strong><br><br>% de leads que progrediram pra <code>sold</code>, <code>installed</code> ou <code>scheduled</code>.</span></span></div><div class="kpi-value" id="kpi-rate">—</div><div class="kpi-sub">taxa de conversão</div></div>
+</div>
+
+<div class="section" id="funnel-google-section">
+  <div class="section-header"><h2>Funil completo Google <span class="canal-tag google">google</span><span class="tip">i<span class="tip-content"><strong>Etapas:</strong><ul><li><strong>Cliques</strong>: <code>ads.google_ads_campaigns_daily_data</code> (join <code>name = config.campaign_name</code>)</li><li><strong>Sessões</strong>: <code>comparison.page_load</code> (distinct session_id)</li><li><strong>Zip search</strong>: <code>comparison.zip_search_click</code></li><li><strong>Clickoff</strong>: <code>comparison.clickoff</code></li><li><strong>Redirect</strong>: <code>comparison.clickoff_redirect</code></li><li><strong>Leads/Vendas</strong>: <code>checkout.lead_detail</code> com <code>source='google'</code>, <code>lead_accepted=true</code>, <code>partner_id_partner = id_mp</code> do anunciante</li></ul><strong>Atribuição:</strong> via <code>config.utm_campaign</code> (status=enabled, deleted_at IS NULL).<hr><strong>Alerta visual:</strong> células com <strong>fundo vermelho</strong> indicam taxa &lt;50% da mediana (ou CAC &gt;200%); <strong>fundo verde</strong> indica o oposto. Só conta partners com Cliques ≥ 30.<hr><strong>Gotchas:</strong><ul><li>The Fiber e Enove sem config ativa de Google — não aparecem aqui mesmo tendo investimento.</li><li>Sessões pode ser &gt; Cliques (inclui tráfego não-ads).</li><li>Clickoff pode ocorrer sem passar por Zip search.</li></ul></span></span></h2></div>
+  <div class="table-wrap" id="funnel-google-table"></div>
+  <div class="alert-legend"><span class="swatch bad"></span> Pior que o padrão (&lt;50% mediana / CAC &gt;200%) · <span class="swatch good"></span> Melhor que o padrão · Só partners com Cliques ≥ 30 entram na comparação.</div>
+</div>
+
+<div class="section" id="funnel-meta-section">
+  <div class="section-header"><h2>Funil completo Meta WhatsApp <span class="canal-tag meta">meta</span><span class="tip">i<span class="tip-content"><strong>Etapas (todas de <code>whatsapp_assistant.*</code>):</strong><ul><li><strong>Chat start</strong>: <code>wa_chat_start</code></li><li><strong>Zip search</strong>: <code>wa_zip_search</code></li><li><strong>Get plans</strong>: <code>wa_get_plans</code></li><li><strong>Redirect</strong>: <code>wa_redirect</code></li><li><strong>Leads/Vendas</strong>: <code>checkout.lead_detail</code> com <code>source='whatsapp'</code>, <code>lead_accepted=true</code>, <code>partner_id_partner = id_mp</code> do anunciante</li></ul><strong>Atribuição:</strong> via <code>referral_agent_label LIKE 'mpa.X@Y'</code> (lista hardcoded de 10 variações → 8 partners). Lead conectado ao chat via <code>user_id</code> com janela 7d antes.<hr><strong>Alerta visual:</strong> células com <strong>fundo vermelho</strong> indicam taxa &lt;50% da mediana (ou CAC &gt;200%); <strong>fundo verde</strong> indica o oposto. Só conta partners com Chat start ≥ 10.<hr><strong>Gotchas:</strong><ul><li>Zip search e Get plans têm volume idêntico (disparados juntos pelo bot).</li><li>Desktop excluído (não é cliente MP Agência).</li><li>Unifique vira 100% cashback no histórico — leads vão pra outros provedores.</li></ul></span></span></h2></div>
+  <div class="table-wrap" id="funnel-meta-table"></div>
+  <div class="alert-legend"><span class="swatch bad"></span> Pior que o padrão (&lt;50% mediana / CAC &gt;200%) · <span class="swatch good"></span> Melhor que o padrão · Só partners com Cliques ≥ 100 entram na comparação.</div>
+</div>
+
+<div class="section" id="coverage-section">
+  <h2>Análise de Cobertura e Assertividade<span class="tip">i<span class="tip-content"><strong>3 indicadores combinados:</strong><ul><li><strong>% Cashback</strong> = cashback / bruto. Mede quanto do investimento voltou como cashback (leads/redirects pra outros provedores). Alto = muito reaproveitamento fora da cobertura do anunciante.</li><li><strong>% Leads/Clickoff</strong> (Google) = leads produtivos do anunciante / clickoffs totais. Mede assertividade da cobertura: dos clickoffs gerados pelo tráfego pago, quantos viraram lead no anunciante.</li><li><strong>% Leads/Chat</strong> (Meta) = leads produtivos / chats iniciados. Análogo ao Google.</li></ul><hr><strong>Destaque visual:</strong> verde = melhor que mediana, vermelho = pior. Para %Cashback alto é tratado como "ruim" (pouca conversão pro anunciante). Para %Assertividade alto é "bom".</span></span></h2>
+  <div class="table-wrap" id="coverage-table"></div>
+  <div class="alert-legend"><span class="swatch bad"></span> Pior que o padrão · <span class="swatch good"></span> Melhor · "—" = volume base insuficiente. % Cashback: alto = lead caiu fora da cobertura. % Assertividade: alto = tráfego virou lead próprio.</div>
+</div>
+
+<div class="section" id="progressao-section">
+  <div class="section-header">
+    <h2>Progressão por Partner<span class="tip">i<span class="tip-content"><strong>Aparece quando você seleciona um partner específico</strong> no filtro.<br><br>Linhas = métricas-chave. Colunas = períodos.<br>Toggle <strong>Mensal</strong> (fev/26 a jun/26) ou <strong>Semanal</strong> (últimas 12 semanas).<br><br><strong>Métricas mostradas:</strong><ul><li>Investimento bruto / cashback / líquido / %Cashback</li><li>Cliques Google + Meta</li><li>Clickoff (Google) e Chat start (Meta)</li><li>Leads e Vendas</li><li>CPL líq. e CAC líq.</li><li>%Assertividade por canal</li><li>Lead → Venda</li></ul>Os dados são extraídos das mesmas fontes das outras seções (consistente com filtros aplicados).</span></span></h2>
+    <div class="btn-group" id="progressao-gran">
+      <button data-gran="monthly" aria-pressed="true">Mensal</button>
+      <button data-gran="weekly">Semanal</button>
+    </div>
+  </div>
+  <div class="table-wrap" id="progressao-table"></div>
+  <div class="note">* Leads produtivos: <code>source</code> em google/whatsapp e <code>lead_accepted=true</code>.</div>
+</div>
+
+<div class="section">
+  <h2>Detalhamento investimento × leads × vendas<span class="tip">i<span class="tip-content"><strong>Consolidado por partner</strong> (soma Google + Meta quando filtro Canal = Todos).<br><br>Mesmos filtros das tabelas de funil acima:<ul><li>Lead: <code>source IN ('google','whatsapp')</code>, <code>lead_accepted = true</code>, <code>partner_id_partner = id_mp</code> do anunciante</li><li>Venda: <code>current_situation IN ('sold','installed','scheduled')</code></li><li>Investimento: <code>raw_investment</code>, <code>cashback</code> e <code>partnership_net_daily_spend</code> de <code>performance_partner_mp_agency</code></li></ul>CPL e CAC sobre líquido.<hr><strong>Alerta visual</strong> na Taxa Lead→Venda e no CAC: fundo vermelho se &lt;50% (ou &gt;200% pro CAC) da mediana; verde no oposto. Só partners com Leads ≥ 3 entram na comparação.<hr>Linhas em amarelo (linha inteira): partner com bruto &gt; 0 mas leads = 0.</span></span></h2>
+  <div id="table-container" class="table-wrap"></div>
+  <div class="alert-legend"><span class="swatch bad"></span> Pior que o padrão · <span class="swatch good"></span> Melhor que o padrão · Só partners com Leads ≥ 3 entram na comparação.</div>
+</div>
+
+<div class="section">
+  <h2>Crédito Remanescente por Parceiro<span class="tip">i<span class="tip-content"><strong>Fonte:</strong> <code>credit_remaining</code> em <code>performance_partner_mp_agency</code>, agregado por dia × partnership_id.<br><br>Mostra a evolução do crédito disponível pra mídia de cada parceiro ao longo do tempo. Cada salto pra cima indica recarga (aumento do <code>total_credit</code>); a queda gradual reflete o consumo pelo investimento diário.<br><br><strong>Valor negativo</strong>: o partner gastou mais do que tinha de crédito ativo no período — pode ser política de adiantamento ou ajuste retroativo do MP.<br><br>Filtros de canal/período não se aplicam aqui (a métrica é por parceiro, agregada).</span></span></h2>
+  <div class="chart-container" style="height:320px"><canvas id="chart-time"></canvas></div>
+  <div class="note">Cores fixas por parceiro. Use o filtro <strong>Partner</strong> no topo pra isolar uma linha. Clique na legenda do Chart pra ocultar/exibir.</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+
+<script>
+// ─────────── DADOS (snapshot 2026-06-30) ───────────
+const SNAPSHOT_ISO   = "2026-07-02T08:00:00-03:00";
+const SNAPSHOT_COVER = "02/07/26";
+
+const SNAPSHOT = [{"period_key":"2026-02","id_mp":"loga-internet","canal":"google","bruto":3925,"cashback":-298,"liquido":4226},{"period_key":"2026-02","id_mp":"loga-internet","canal":"meta","bruto":5554,"cashback":2911,"liquido":2640},{"period_key":"2026-02","id_mp":"interplus internet","canal":"google","bruto":869,"cashback":838,"liquido":30},{"period_key":"2026-02","id_mp":"interplus internet","canal":"meta","bruto":913,"cashback":729,"liquido":182},{"period_key":"2026-03","id_mp":"interplus internet","canal":"google","bruto":4585,"cashback":2378,"liquido":2207},{"period_key":"2026-03","id_mp":"interplus internet","canal":"meta","bruto":6377,"cashback":4894,"liquido":1482},{"period_key":"2026-03","id_mp":"loga-internet","canal":"google","bruto":5130,"cashback":84,"liquido":5045},{"period_key":"2026-03","id_mp":"loga-internet","canal":"meta","bruto":8092,"cashback":2200,"liquido":5893},{"period_key":"2026-04","id_mp":"interplus internet","canal":"google","bruto":4046,"cashback":1842,"liquido":2203},{"period_key":"2026-04","id_mp":"interplus internet","canal":"meta","bruto":6057,"cashback":5563,"liquido":499},{"period_key":"2026-04","id_mp":"loga-internet","canal":"google","bruto":2869,"cashback":-104,"liquido":2969},{"period_key":"2026-04","id_mp":"loga-internet","canal":"meta","bruto":4899,"cashback":811,"liquido":4087},{"period_key":"2026-04","id_mp":"the fiber internet","canal":"google","bruto":2099,"cashback":397,"liquido":1703},{"period_key":"2026-04","id_mp":"the fiber internet","canal":"meta","bruto":3927,"cashback":1853,"liquido":2074},{"period_key":"2026-04","id_mp":"direct internet","canal":"google","bruto":1691,"cashback":367,"liquido":1323},{"period_key":"2026-04","id_mp":"direct internet","canal":"meta","bruto":975,"cashback":735,"liquido":237},{"period_key":"2026-05","id_mp":"direct internet","canal":"google","bruto":3021,"cashback":486,"liquido":2539},{"period_key":"2026-05","id_mp":"direct internet","canal":"meta","bruto":3518,"cashback":1310,"liquido":2207},{"period_key":"2026-05","id_mp":"interplus internet","canal":"google","bruto":3022,"cashback":1366,"liquido":1661},{"period_key":"2026-05","id_mp":"interplus internet","canal":"meta","bruto":4582,"cashback":2929,"liquido":1653},{"period_key":"2026-05","id_mp":"loga-internet","canal":"google","bruto":5150,"cashback":-410,"liquido":5558},{"period_key":"2026-05","id_mp":"loga-internet","canal":"meta","bruto":4922,"cashback":1553,"liquido":3368},{"period_key":"2026-05","id_mp":"the fiber internet","canal":"google","bruto":4187,"cashback":146,"liquido":4038},{"period_key":"2026-05","id_mp":"the fiber internet","canal":"meta","bruto":9306,"cashback":3080,"liquido":6229},{"period_key":"2026-05","id_mp":"unifique","canal":"google","bruto":2663,"cashback":133,"liquido":2530},{"period_key":"2026-05","id_mp":"unifique","canal":"meta","bruto":3126,"cashback":741,"liquido":2384},{"period_key":"2026-05","id_mp":"enove-fibra","canal":"google","bruto":2550,"cashback":620,"liquido":1931},{"period_key":"2026-05","id_mp":"enove-fibra","canal":"meta","bruto":2790,"cashback":2449,"liquido":341},{"period_key":"2026-06","id_mp":"direct internet","canal":"google","bruto":2307,"cashback":279,"liquido":2029},{"period_key":"2026-06","id_mp":"direct internet","canal":"meta","bruto":2509,"cashback":494,"liquido":2018},{"period_key":"2026-06","id_mp":"enove-fibra","canal":"google","bruto":2750,"cashback":1334,"liquido":1413},{"period_key":"2026-06","id_mp":"enove-fibra","canal":"meta","bruto":3018,"cashback":587,"liquido":2433},{"period_key":"2026-06","id_mp":"interplus internet","canal":"google","bruto":851,"cashback":148,"liquido":701},{"period_key":"2026-06","id_mp":"interplus internet","canal":"meta","bruto":779,"cashback":381,"liquido":398},{"period_key":"2026-06","id_mp":"loga-internet","canal":"google","bruto":6528,"cashback":535,"liquido":5995},{"period_key":"2026-06","id_mp":"loga-internet","canal":"meta","bruto":3670,"cashback":1305,"liquido":2362},{"period_key":"2026-06","id_mp":"the fiber internet","canal":"google","bruto":2381,"cashback":329,"liquido":2051},{"period_key":"2026-06","id_mp":"the fiber internet","canal":"meta","bruto":2568,"cashback":537,"liquido":2030},{"period_key":"2026-06","id_mp":"ativa-telecom","canal":"meta","bruto":631,"cashback":256,"liquido":376},{"period_key":"2026-06","id_mp":"ultranet-network","canal":"meta","bruto":1411,"cashback":-22,"liquido":1434},{"period_key":"2026-06","id_mp":"ultranet-network","canal":"google","bruto":1223,"cashback":411,"liquido":812},{"period_key":"2026-06","id_mp":"unifique","canal":"meta","bruto":1087,"cashback":492,"liquido":591},{"period_key":"2026-06","id_mp":"unifique","canal":"google","bruto":945,"cashback":237,"liquido":707},{"period_key":"2026-06","id_mp":"ativa-telecom","canal":"google","bruto":568,"cashback":607,"liquido":-39},{"period_key":"7d","id_mp":"ativa-telecom","canal":"google","bruto":647,"cashback":756,"liquido":-108},{"period_key":"7d","id_mp":"ativa-telecom","canal":"meta","bruto":711,"cashback":455,"liquido":254},{"period_key":"7d","id_mp":"direct internet","canal":"google","bruto":775,"cashback":14,"liquido":763},{"period_key":"7d","id_mp":"direct internet","canal":"meta","bruto":890,"cashback":122,"liquido":767},{"period_key":"7d","id_mp":"enove-fibra","canal":"google","bruto":573,"cashback":210,"liquido":363},{"period_key":"7d","id_mp":"enove-fibra","canal":"meta","bruto":668,"cashback":217,"liquido":453},{"period_key":"7d","id_mp":"loga-internet","canal":"google","bruto":1574,"cashback":-12,"liquido":1588},{"period_key":"7d","id_mp":"loga-internet","canal":"meta","bruto":1035,"cashback":87,"liquido":947},{"period_key":"7d","id_mp":"ultranet-network","canal":"google","bruto":556,"cashback":342,"liquido":212},{"period_key":"7d","id_mp":"ultranet-network","canal":"meta","bruto":519,"cashback":62,"liquido":460},{"period_key":"7d","id_mp":"unifique","canal":"google","bruto":330,"cashback":268,"liquido":63},{"period_key":"7d","id_mp":"unifique","canal":"meta","bruto":411,"cashback":350,"liquido":63},{"period_key":"7d","id_mp":"the fiber internet","canal":"google","bruto":161,"cashback":-24,"liquido":186},{"period_key":"7d","id_mp":"the fiber internet","canal":"meta","bruto":157,"cashback":10,"liquido":148},{"period_key":"30d","id_mp":"direct internet","canal":"google","bruto":2382,"cashback":315,"liquido":2070},{"period_key":"30d","id_mp":"direct internet","canal":"meta","bruto":2579,"cashback":480,"liquido":2094},{"period_key":"30d","id_mp":"enove-fibra","canal":"google","bruto":2729,"cashback":1458,"liquido":1275},{"period_key":"30d","id_mp":"enove-fibra","canal":"meta","bruto":2986,"cashback":610,"liquido":2378},{"period_key":"30d","id_mp":"interplus internet","canal":"google","bruto":742,"cashback":165,"liquido":580},{"period_key":"30d","id_mp":"interplus internet","canal":"meta","bruto":627,"cashback":204,"liquido":424},{"period_key":"30d","id_mp":"loga-internet","canal":"google","bruto":6701,"cashback":483,"liquido":6221},{"period_key":"30d","id_mp":"loga-internet","canal":"meta","bruto":3768,"cashback":1280,"liquido":2491},{"period_key":"30d","id_mp":"the fiber internet","canal":"google","bruto":2327,"cashback":306,"liquido":2026},{"period_key":"30d","id_mp":"the fiber internet","canal":"meta","bruto":2431,"cashback":507,"liquido":1923},{"period_key":"30d","id_mp":"ativa-telecom","canal":"meta","bruto":810,"cashback":524,"liquido":283},{"period_key":"30d","id_mp":"ultranet-network","canal":"google","bruto":1355,"cashback":546,"liquido":811},{"period_key":"30d","id_mp":"ativa-telecom","canal":"google","bruto":734,"cashback":832,"liquido":-98},{"period_key":"30d","id_mp":"ultranet-network","canal":"meta","bruto":1517,"cashback":-33,"liquido":1557},{"period_key":"30d","id_mp":"unifique","canal":"meta","bruto":1130,"cashback":483,"liquido":648},{"period_key":"30d","id_mp":"unifique","canal":"google","bruto":967,"cashback":234,"liquido":736},{"period_key":"90d","id_mp":"interplus internet","canal":"google","bruto":7579,"cashback":3180,"liquido":4400},{"period_key":"90d","id_mp":"interplus internet","canal":"meta","bruto":10961,"cashback":8403,"liquido":2555},{"period_key":"90d","id_mp":"loga-internet","canal":"google","bruto":14629,"cashback":-14,"liquido":14665},{"period_key":"90d","id_mp":"loga-internet","canal":"meta","bruto":13168,"cashback":3671,"liquido":9491},{"period_key":"90d","id_mp":"the fiber internet","canal":"google","bruto":8793,"cashback":859,"liquido":7952},{"period_key":"90d","id_mp":"the fiber internet","canal":"meta","bruto":15928,"cashback":5463,"liquido":10452},{"period_key":"90d","id_mp":"direct internet","canal":"google","bruto":7205,"cashback":1159,"liquido":6067},{"period_key":"90d","id_mp":"direct internet","canal":"meta","bruto":7193,"cashback":2492,"liquido":4690},{"period_key":"90d","id_mp":"unifique","canal":"meta","bruto":4245,"cashback":1216,"liquido":3025},{"period_key":"90d","id_mp":"unifique","canal":"google","bruto":3621,"cashback":370,"liquido":3260},{"period_key":"90d","id_mp":"enove-fibra","canal":"google","bruto":5450,"cashback":2052,"liquido":3404},{"period_key":"90d","id_mp":"enove-fibra","canal":"meta","bruto":5967,"cashback":3101,"liquido":2870},{"period_key":"90d","id_mp":"ativa-telecom","canal":"meta","bruto":810,"cashback":524,"liquido":283},{"period_key":"90d","id_mp":"ultranet-network","canal":"google","bruto":1355,"cashback":546,"liquido":811},{"period_key":"90d","id_mp":"ativa-telecom","canal":"google","bruto":734,"cashback":832,"liquido":-98},{"period_key":"90d","id_mp":"ultranet-network","canal":"meta","bruto":1517,"cashback":-33,"liquido":1557},{"period_key":"2026-07","id_mp":"ativa-telecom","canal":"google","bruto":171,"cashback":229,"liquido":-58},{"period_key":"2026-07","id_mp":"ativa-telecom","canal":"meta","bruto":179,"cashback":269,"liquido":-90},{"period_key":"2026-07","id_mp":"direct internet","canal":"google","bruto":213,"cashback":13,"liquido":201},{"period_key":"2026-07","id_mp":"direct internet","canal":"meta","bruto":220,"cashback":-32,"liquido":253},{"period_key":"2026-07","id_mp":"enove-fibra","canal":"google","bruto":173,"cashback":67,"liquido":106},{"period_key":"2026-07","id_mp":"enove-fibra","canal":"meta","bruto":171,"cashback":67,"liquido":104},{"period_key":"2026-07","id_mp":"loga-internet","canal":"google","bruto":418,"cashback":-62,"liquido":481},{"period_key":"2026-07","id_mp":"loga-internet","canal":"meta","bruto":260,"cashback":84,"liquido":175},{"period_key":"2026-07","id_mp":"the fiber internet","canal":"google","bruto":161,"cashback":-24,"liquido":186},{"period_key":"2026-07","id_mp":"the fiber internet","canal":"meta","bruto":157,"cashback":10,"liquido":148},{"period_key":"2026-07","id_mp":"ultranet-network","canal":"google","bruto":138,"cashback":135,"liquido":2},{"period_key":"2026-07","id_mp":"ultranet-network","canal":"meta","bruto":112,"cashback":-16,"liquido":129},{"period_key":"2026-07","id_mp":"unifique","canal":"google","bruto":31,"cashback":-4,"liquido":35},{"period_key":"2026-07","id_mp":"unifique","canal":"meta","bruto":51,"cashback":-7,"liquido":59}];
+
+const DS_PARTNERS = ["loga-internet", "the fiber internet", "interplus internet", "direct internet", "enove-fibra", "unifique", "ultranet-network", "ativa-telecom"];
+const DAILY_SNAPSHOT = [["2026-01-05",0,0,0,0,0,0,0,0,0,1,1],["2026-02-02",0,80,-12,92,1,0,40,-6,46,0,0],["2026-02-03",0,160,-24,184,2,2,186,114,72,5,5],["2026-02-04",0,166,-25,191,1,1,167,256,-89,2,1],["2026-02-05",0,162,-24,186,5,2,170,441,-271,4,1],["2026-02-06",0,140,-21,161,3,2,156,60,96,0,0],["2026-02-07",0,55,-8,64,3,0,142,115,27,4,2],["2026-02-08",0,22,-3,25,1,1,202,135,67,1,1],["2026-02-09",0,333,-50,382,8,2,216,82,134,5,4],["2026-02-10",0,245,-37,281,7,1,144,199,-55,2,1],["2026-02-11",0,149,-22,171,8,4,151,277,-126,2,0],["2026-02-12",0,63,-10,73,1,0,189,261,-73,4,0],["2026-02-13",0,113,16,97,2,1,204,85,119,4,4],["2026-02-14",0,290,78,212,1,1,251,73,178,3,2],["2026-02-15",0,100,-15,115,0,0,258,22,236,1,1],["2026-02-16",0,197,-30,227,2,1,248,152,97,3,0],["2026-02-17",0,84,7,77,3,1,257,31,226,5,4],["2026-02-18",0,219,26,194,4,2,262,23,239,9,6],["2026-02-19",0,163,-24,188,5,0,224,109,116,8,5],["2026-02-20",0,100,-15,115,4,3,193,6,186,7,5],["2026-02-21",0,63,-9,73,1,0,223,85,137,3,0],["2026-02-22",0,185,29,156,2,0,231,-35,266,3,1],["2026-02-23",2,9,86,-78,0,0,120,9,112,1,1],["2026-02-23",0,223,-33,256,5,4,272,77,195,5,1],["2026-02-24",2,29,58,-29,0,0,177,166,11,0,0],["2026-02-24",0,155,-23,179,5,3,260,89,170,3,2],["2026-02-25",2,263,249,14,2,2,139,101,37,0,0],["2026-02-25",0,130,-19,149,1,0,240,86,153,5,2],["2026-02-26",2,299,286,14,2,2,131,193,-63,1,1],["2026-02-26",0,153,-23,176,6,0,224,160,64,6,3],["2026-02-27",2,156,61,94,0,0,182,117,65,0,0],["2026-02-27",0,91,-14,105,5,4,227,-34,261,4,1],["2026-02-28",2,113,98,15,0,0,164,143,20,0,0],["2026-02-28",0,84,-13,97,3,1,217,48,169,1,0],["2026-03-01",2,70,-11,81,1,0,182,178,5,0,0],["2026-03-01",0,68,-10,78,1,0,259,-30,289,5,4],["2026-03-02",2,296,128,168,1,1,200,253,-53,0,0],["2026-03-02",0,219,-33,252,10,6,275,19,257,8,5],["2026-03-03",2,228,-6,234,2,1,186,177,9,0,0],["2026-03-03",0,197,-5,201,3,2,250,20,230,4,2],["2026-03-04",2,145,-22,167,1,1,182,0,183,0,0],["2026-03-04",0,176,-1,178,5,2,250,149,100,2,1],["2026-03-05",2,152,13,138,0,0,151,162,-12,0,0],["2026-03-05",0,174,-1,175,5,3,216,57,160,2,1],["2026-03-06",2,42,-6,48,1,0,147,17,130,0,0],["2026-03-06",0,115,-17,132,4,3,203,151,52,1,0],["2026-03-07",2,133,95,39,0,0,147,55,92,0,0],["2026-03-07",0,79,30,48,2,0,220,-33,253,7,3],["2026-03-08",2,13,42,-29,0,0,182,177,6,0,0],["2026-03-08",0,62,36,26,0,0,259,67,192,5,3],["2026-03-09",2,282,177,106,2,2,245,306,-62,0,0],["2026-03-09",0,240,54,187,5,1,308,166,142,7,3],["2026-03-10",2,185,536,-351,2,0,220,305,-85,0,0],["2026-03-10",0,157,88,69,9,5,288,201,87,5,3],["2026-03-11",2,134,6,127,1,1,184,59,125,0,0],["2026-03-11",0,149,-22,171,5,2,208,6,202,8,6],["2026-03-12",2,87,68,19,0,0,218,159,59,1,0],["2026-03-12",0,164,-25,188,6,4,218,344,-126,1,0],["2026-03-13",2,87,214,-127,1,1,151,43,108,1,0],["2026-03-13",0,173,-26,199,7,6,209,98,111,4,1],["2026-03-14",2,70,56,14,3,3,200,158,42,0,0],["2026-03-14",0,38,-6,44,1,0,233,29,204,7,3],["2026-03-15",2,30,-4,34,1,1,261,190,71,2,2],["2026-03-15",0,139,-21,160,3,0,278,12,266,4,0],["2026-03-16",2,300,325,-25,2,1,275,102,173,1,1],["2026-03-16",0,350,37,313,7,6,322,41,281,7,2],["2026-03-17",2,315,10,305,0,0,275,199,76,1,1],["2026-03-17",0,240,22,218,7,7,272,61,211,5,4],["2026-03-18",2,214,57,157,0,0,200,98,102,0,0],["2026-03-18",0,206,14,192,6,4,268,138,130,6,2],["2026-03-19",2,202,37,165,2,1,199,359,-160,0,0],["2026-03-19",0,213,0,213,5,5,252,115,137,4,2],["2026-03-20",2,102,134,-33,2,0,182,90,91,0,0],["2026-03-20",0,164,50,113,4,2,233,25,208,6,2],["2026-03-21",2,67,-10,78,0,0,192,239,-47,0,0],["2026-03-21",0,56,-8,64,1,0,246,-6,252,4,0],["2026-03-22",2,119,-18,137,0,0,253,39,214,0,0],["2026-03-22",0,65,-10,74,1,1,292,35,256,3,0],["2026-03-23",2,226,68,158,1,1,243,523,-280,0,0],["2026-03-23",0,350,-52,402,12,9,304,174,130,5,1],["2026-03-24",2,183,50,132,3,1,229,156,73,0,0],["2026-03-24",0,192,-29,221,7,6,277,140,137,6,2],["2026-03-25",2,139,126,13,2,1,201,-30,231,1,1],["2026-03-25",0,109,-16,125,7,7,259,69,190,4,0],["2026-03-26",2,157,95,62,1,1,199,196,3,0,0],["2026-03-26",0,211,-32,243,2,0,248,31,217,3,2],["2026-03-27",2,50,-8,58,2,0,193,224,-31,0,0],["2026-03-27",0,201,26,176,3,2,245,89,156,4,2],["2026-03-28",2,35,-5,41,0,0,176,175,1,0,0],["2026-03-28",0,90,-14,104,3,1,248,25,223,3,1],["2026-03-29",2,66,-10,76,0,0,233,9,224,0,0],["2026-03-29",0,29,-4,34,0,0,286,-5,291,3,0],["2026-03-30",2,309,180,129,2,1,243,200,42,0,0],["2026-03-30",0,308,88,219,2,0,335,20,315,4,2],["2026-03-31",2,147,61,86,1,1,228,76,152,0,0],["2026-03-31",0,196,-29,226,7,6,331,-8,340,10,1],["2026-04-01",2,170,183,-13,2,1,243,171,73,0,0],["2026-04-01",0,161,-24,185,6,1,332,8,324,4,1],["2026-04-02",2,135,-20,155,1,1,187,276,-90,0,0],["2026-04-02",0,127,13,113,3,2,204,63,141,5,1],["2026-04-03",2,73,-11,84,0,0,170,186,-16,0,0],["2026-04-03",0,33,-5,38,1,0,214,24,190,4,1],["2026-04-04",2,77,38,38,0,0,208,86,122,0,0],["2026-04-04",0,59,-9,68,0,0,227,133,94,3,0],["2026-04-05",2,265,124,141,0,0,248,77,171,1,1],["2026-04-05",0,258,-1,259,5,2,274,-10,284,4,2],["2026-04-06",2,186,172,14,2,2,260,202,59,0,0],["2026-04-06",0,279,-42,321,9,5,276,123,153,5,2],["2026-04-07",2,178,80,98,1,1,224,295,-71,0,0],["2026-04-07",0,199,30,169,4,2,277,60,217,5,1],["2026-04-08",2,161,66,95,0,0,204,152,52,0,0],["2026-04-08",0,157,21,136,5,1,233,27,206,2,2],["2026-04-09",2,222,48,174,0,0,191,244,-53,0,0],["2026-04-09",0,145,-22,166,6,3,164,-25,188,7,3],["2026-04-10",2,121,-18,139,3,3,184,163,21,0,0],["2026-04-10",0,56,1,55,2,0,146,130,15,1,1],["2026-04-10",1,43,-6,49,1,0,95,217,-122,0,0],["2026-04-11",2,100,-15,115,0,0,200,225,-24,1,0],["2026-04-11",0,62,15,47,3,1,154,41,113,4,1],["2026-04-11",1,83,-12,95,2,0,75,21,54,0,0],["2026-04-12",2,72,-11,83,0,0,212,79,134,0,0],["2026-04-12",0,59,16,42,3,0,160,-24,184,0,0],["2026-04-12",1,166,53,113,1,0,105,-16,121,0,0],["2026-04-13",2,92,58,34,1,1,204,240,-36,0,0],["2026-04-13",0,113,-17,130,4,1,166,103,63,5,2],["2026-04-13",1,107,57,50,0,0,116,-17,134,0,0],["2026-04-14",2,301,238,62,4,3,279,858,-580,0,0],["2026-04-14",0,200,-30,230,7,3,203,-1,204,9,3],["2026-04-14",1,138,-21,158,1,1,134,9,125,0,0],["2026-04-15",2,231,-33,264,3,3,223,242,-18,1,0],["2026-04-15",0,131,-20,151,4,2,174,5,169,5,1],["2026-04-15",1,91,-14,105,2,2,130,166,-36,0,0],["2026-04-16",3,29,-4,33,2,0,0,0,0,0,0],["2026-04-16",2,123,191,-68,0,0,213,194,19,0,0],["2026-04-16",0,119,13,106,3,1,166,6,160,7,2],["2026-04-16",1,53,-8,61,1,1,98,-15,113,0,0],["2026-04-17",3,31,-5,36,3,2,0,0,0,0,0],["2026-04-17",2,180,98,82,2,0,185,73,112,0,0],["2026-04-17",0,82,-12,94,4,3,158,-24,182,1,0],["2026-04-17",1,96,-14,111,1,0,96,174,-78,0,0],["2026-04-18",3,61,-9,70,2,1,0,0,0,0,0],["2026-04-18",2,95,27,68,0,0,196,172,24,0,0],["2026-04-18",0,5,63,-58,0,0,165,-25,190,2,0],["2026-04-18",1,135,60,75,2,2,114,170,-56,0,0],["2026-04-19",3,149,45,103,1,0,0,0,0,0,0],["2026-04-19",2,160,-24,184,0,0,246,76,169,0,0],["2026-04-19",0,14,-2,16,0,0,182,25,157,5,0],["2026-04-19",1,79,-12,91,2,1,123,158,-35,0,0],["2026-04-20",3,200,-30,230,7,0,0,0,0,0,0],["2026-04-20",2,115,96,19,1,0,259,64,195,0,0],["2026-04-20",0,113,-17,130,5,1,238,-36,274,9,5],["2026-04-20",1,154,14,140,1,1,152,209,-56,0,0],["2026-04-21",3,200,142,58,2,1,0,0,0,0,0],["2026-04-21",2,115,102,13,1,0,229,27,202,0,0],["2026-04-21",0,119,-18,136,4,3,158,-24,182,1,0],["2026-04-21",1,94,88,6,4,2,115,115,0,0,0],["2026-04-22",3,200,-30,230,3,0,98,22,76,0,0],["2026-04-22",2,103,50,53,1,1,190,465,-274,0,0],["2026-04-22",0,53,-8,61,0,0,56,-8,65,2,1],["2026-04-22",1,92,-14,106,2,2,125,-19,143,0,0],["2026-04-23",3,168,208,-40,0,0,139,-21,160,0,0],["2026-04-23",2,102,-15,117,2,1,163,256,-92,0,0],["2026-04-23",1,92,85,8,3,2,110,75,34,0,0],["2026-04-24",3,104,-16,119,1,0,70,-10,80,0,0],["2026-04-24",2,31,70,-39,0,0,131,327,-196,0,0],["2026-04-24",1,122,43,79,1,1,187,103,84,0,0],["2026-04-25",3,119,-18,137,3,1,91,9,81,0,0],["2026-04-25",2,166,198,-32,1,1,115,185,-70,0,0],["2026-04-25",0,0,0,0,0,0,0,0,0,1,0],["2026-04-25",1,80,21,59,2,1,312,78,233,0,0],["2026-04-26",3,71,25,46,0,0,130,33,96,0,0],["2026-04-26",2,111,-17,128,1,1,187,42,145,0,0],["2026-04-26",1,86,23,62,2,1,407,206,202,0,0],["2026-04-27",3,90,45,46,0,0,164,350,-186,0,0],["2026-04-27",2,101,43,58,3,3,188,176,12,1,0],["2026-04-27",1,114,45,70,3,2,421,119,302,0,0],["2026-04-28",3,58,-9,67,0,0,115,103,11,0,0],["2026-04-28",2,99,85,14,1,1,205,-31,236,1,0],["2026-04-28",1,71,-11,82,2,1,299,90,209,0,0],["2026-04-28",5,0,0,0,0,0,0,0,0,0,0],["2026-04-29",3,45,48,-3,0,0,88,223,-135,0,0],["2026-04-29",2,95,-14,110,2,1,142,-21,164,0,0],["2026-04-29",0,122,-18,140,4,1,273,55,218,3,2],["2026-04-29",1,63,41,22,3,2,286,-43,329,0,0],["2026-04-30",3,166,-25,191,0,0,80,26,54,0,0],["2026-04-30",2,66,53,13,0,0,171,62,109,1,1],["2026-04-30",0,203,-31,234,3,3,299,185,114,0,0],["2026-04-30",1,140,-21,161,7,2,427,53,374,0,0],["2026-05-01",3,75,198,-122,2,1,103,47,56,0,0],["2026-05-01",2,60,12,48,1,1,100,99,1,0,0],["2026-05-01",0,73,-11,84,3,1,297,218,79,4,0],["2026-05-01",1,114,-17,132,1,1,277,131,146,0,0],["2026-05-02",3,49,-7,57,3,0,118,36,82,0,0],["2026-05-02",2,92,118,-26,0,0,67,80,-13,0,0],["2026-05-02",0,130,-19,149,6,2,297,242,55,3,1],["2026-05-02",1,99,-15,114,1,1,272,168,105,0,0],["2026-05-03",3,169,139,30,2,1,139,28,111,0,0],["2026-05-03",2,125,14,112,0,0,175,-26,201,0,0],["2026-05-03",0,71,-11,82,0,0,227,-34,261,2,0],["2026-05-03",1,38,-6,43,1,0,445,213,232,0,0],["2026-05-04",3,110,-16,126,0,0,139,86,53,0,0],["2026-05-04",2,125,47,78,0,0,194,29,165,1,1],["2026-05-04",0,139,-21,160,4,2,201,-5,206,8,3],["2026-05-04",1,153,-23,176,3,1,396,106,290,0,0],["2026-05-05",3,94,-14,108,1,1,100,21,79,0,0],["2026-05-05",2,98,78,20,1,1,146,-22,167,0,0],["2026-05-05",0,146,-22,168,9,7,170,11,159,1,0],["2026-05-05",1,87,105,-18,0,0,385,150,235,0,0],["2026-05-06",3,125,-19,143,2,2,118,19,99,1,0],["2026-05-06",2,114,226,-112,0,0,169,60,109,0,0],["2026-05-06",0,161,50,111,3,0,178,22,156,2,2],["2026-05-06",1,114,20,95,5,0,352,-2,353,1,1],["2026-05-06",5,168,51,116,0,0,231,2,229,0,0],["2026-05-07",3,107,44,63,4,0,107,-16,123,1,1],["2026-05-07",2,115,-17,133,2,0,152,118,34,1,0],["2026-05-07",0,164,-25,189,4,0,150,30,120,1,0],["2026-05-07",1,116,42,73,2,2,295,41,254,0,0],["2026-05-07",5,150,-22,172,0,0,142,83,59,0,0],["2026-05-08",3,86,-13,99,5,2,95,-14,109,1,0],["2026-05-08",2,98,48,50,0,0,123,155,-33,0,0],["2026-05-08",0,174,-26,200,5,0,143,6,137,1,0],["2026-05-08",1,100,92,8,3,3,258,137,121,0,0],["2026-05-08",5,149,-22,172,0,0,141,6,135,0,0],["2026-05-09",3,77,-12,88,4,0,97,67,30,1,0],["2026-05-09",2,51,55,-4,0,0,101,-15,116,0,0],["2026-05-09",0,127,5,122,8,4,126,30,95,2,0],["2026-05-09",1,70,-10,80,3,1,258,206,52,2,2],["2026-05-09",5,94,88,6,0,0,98,93,5,0,0],["2026-05-10",3,53,-8,61,1,0,125,22,103,1,0],["2026-05-10",2,32,20,12,0,0,161,-24,185,2,1],["2026-05-10",0,121,-18,139,3,1,181,25,156,1,0],["2026-05-10",1,37,-6,42,0,0,383,30,354,2,1],["2026-05-10",5,43,94,-51,0,0,210,82,127,0,0],["2026-05-11",3,146,-22,168,6,3,163,125,37,1,0],["2026-05-11",2,148,157,-8,1,1,203,198,5,0,0],["2026-05-11",0,169,39,129,2,1,220,150,69,1,0],["2026-05-11",1,167,-25,192,2,0,383,351,32,0,0],["2026-05-11",5,202,-30,232,0,0,222,45,178,0,0],["2026-05-12",3,123,-18,142,4,2,139,17,122,2,0],["2026-05-12",2,119,175,-56,1,0,180,70,110,0,0],["2026-05-12",0,178,23,155,5,2,199,36,163,4,2],["2026-05-12",1,98,-15,113,4,2,364,213,152,2,2],["2026-05-12",5,312,-15,327,0,0,51,-8,59,0,0],["2026-05-13",3,117,-18,134,4,2,98,-15,113,0,0],["2026-05-13",2,126,107,19,2,2,145,166,-21,0,0],["2026-05-13",0,126,3,123,7,2,168,47,121,4,1],["2026-05-13",1,147,28,119,0,0,317,174,143,1,1],["2026-05-14",3,100,-15,115,7,0,109,-16,125,1,1],["2026-05-14",2,134,-20,154,1,0,134,14,120,0,0],["2026-05-14",0,123,-18,141,1,1,157,0,156,1,0],["2026-05-14",1,102,47,55,2,2,323,157,166,1,0],["2026-05-15",3,124,18,106,3,2,79,60,19,1,0],["2026-05-15",4,171,-26,197,0,0,58,-9,67,0,0],["2026-05-15",2,113,-17,130,2,2,127,77,50,0,0],["2026-05-15",0,145,-22,167,4,1,146,65,81,2,1],["2026-05-15",1,50,-8,58,0,0,308,-16,324,1,0],["2026-05-16",3,73,88,-15,2,0,84,45,38,4,0],["2026-05-16",4,148,-22,170,0,0,153,157,-4,0,0],["2026-05-16",2,9,-1,11,0,0,108,-16,124,0,0],["2026-05-16",0,171,-26,196,5,1,125,-19,143,2,1],["2026-05-16",1,22,27,-4,0,0,312,183,129,1,0],["2026-05-17",3,72,-11,83,1,0,137,3,134,1,0],["2026-05-17",4,150,-23,173,0,0,217,211,6,0,0],["2026-05-17",2,49,14,35,1,0,201,44,158,0,0],["2026-05-17",0,183,27,156,1,0,186,-7,194,2,2],["2026-05-17",1,65,-10,74,1,0,424,-40,464,1,0],["2026-05-18",3,145,-22,167,5,2,140,8,132,1,0],["2026-05-18",4,156,-23,180,0,0,247,280,-33,0,0],["2026-05-18",2,205,22,183,4,3,181,229,-48,0,0],["2026-05-18",0,212,-32,244,7,3,217,131,86,2,0],["2026-05-18",1,200,41,158,0,0,413,-3,416,0,0],["2026-05-18",5,49,-7,56,0,0,196,12,184,0,0],["2026-05-19",3,81,160,-79,1,0,125,56,69,0,0],["2026-05-19",4,170,-25,195,0,0,186,151,35,0,0],["2026-05-19",2,85,-13,98,2,1,184,270,-86,0,0],["2026-05-19",0,178,-3,181,2,0,199,-30,229,3,0],["2026-05-19",1,170,-2,172,3,2,339,173,166,1,1],["2026-05-19",5,122,-18,140,0,0,269,35,234,0,0],["2026-05-20",3,132,-20,152,0,0,110,39,71,0,0],["2026-05-20",4,59,-9,68,0,0,149,270,-121,0,0],["2026-05-20",2,144,29,115,0,0,139,78,61,0,0],["2026-05-20",0,217,-33,250,5,3,126,60,66,5,3],["2026-05-20",1,206,-31,237,5,2,329,142,187,1,1],["2026-05-20",5,74,83,-9,0,0,220,18,202,0,0],["2026-05-21",3,94,-14,108,0,0,110,26,84,0,0],["2026-05-21",4,59,-9,68,0,0,144,169,-25,0,0],["2026-05-21",2,124,25,99,3,1,145,173,-28,0,0],["2026-05-21",0,188,-28,216,5,3,106,103,3,2,1],["2026-05-21",1,195,-29,225,6,3,258,225,32,1,1],["2026-05-21",5,300,5,295,0,0,185,-28,213,0,0],["2026-05-22",3,49,-7,57,0,0,95,243,-148,0,0],["2026-05-22",4,41,-6,48,0,0,131,217,-85,0,0],["2026-05-22",2,60,23,37,2,2,116,55,61,0,0],["2026-05-22",0,170,-25,195,2,1,101,30,71,1,1],["2026-05-22",1,205,-31,235,4,2,213,185,29,1,1],["2026-05-22",5,197,-30,227,0,0,166,28,139,0,0],["2026-05-23",3,48,-7,55,0,0,79,67,11,0,0],["2026-05-23",4,32,52,-20,0,0,118,115,3,0,0],["2026-05-23",2,36,-5,42,1,1,92,50,42,0,0],["2026-05-23",0,176,-26,203,2,0,85,-13,98,1,0],["2026-05-23",1,149,-22,171,4,2,167,17,150,1,1],["2026-05-23",5,150,0,150,0,0,159,58,100,0,0],["2026-05-24",3,55,-8,63,0,0,136,66,70,0,0],["2026-05-24",4,296,46,250,0,0,198,253,-55,0,0],["2026-05-24",2,41,44,-3,0,0,179,93,87,0,0],["2026-05-24",0,169,-25,194,5,2,123,29,95,3,1],["2026-05-24",1,83,-13,96,2,1,265,114,151,1,1],["2026-05-24",5,180,27,153,0,0,208,8,199,0,0],["2026-05-25",3,200,-30,230,0,0,142,29,113,0,0],["2026-05-25",4,300,94,206,0,0,216,375,-160,0,0],["2026-05-25",2,199,-30,229,1,0,178,199,-21,1,0],["2026-05-25",0,319,2,317,9,5,138,84,55,4,0],["2026-05-25",1,368,-13,381,5,3,260,11,249,0,0],["2026-05-25",5,167,-25,192,0,0,215,58,157,0,0],["2026-05-26",3,119,119,0,0,0,114,94,21,0,0],["2026-05-26",4,275,265,10,0,0,76,101,-25,0,0],["2026-05-26",2,118,12,106,1,1,178,304,-126,0,0],["2026-05-26",0,224,-34,257,7,2,114,111,3,1,0],["2026-05-26",1,236,60,176,1,0,252,26,226,0,0],["2026-05-26",5,127,-19,146,0,0,194,122,72,0,0],["2026-05-27",3,109,-16,126,0,0,124,106,18,0,0],["2026-05-27",4,73,-11,84,0,0,136,38,98,0,0],["2026-05-27",2,126,62,64,2,2,160,223,-63,0,0],["2026-05-27",0,234,-35,269,6,3,130,75,55,2,0],["2026-05-27",1,204,-31,234,2,2,240,-36,276,1,0],["2026-05-27",5,127,-19,146,0,0,178,133,45,0,0],["2026-05-28",3,111,-17,128,0,0,82,-12,94,0,0],["2026-05-28",4,97,15,82,0,0,181,25,156,0,0],["2026-05-28",2,76,43,33,1,0,141,134,7,0,0],["2026-05-28",0,222,-33,255,6,3,110,117,-7,5,3],["2026-05-28",1,190,51,139,4,1,218,32,186,0,0],["2026-05-28",5,52,-8,60,0,0,41,-6,47,0,0],["2026-05-29",3,77,49,29,0,0,113,9,104,0,0],["2026-05-29",4,252,82,169,0,0,196,94,102,0,0],["2026-05-29",2,91,12,79,1,1,123,-18,141,0,0],["2026-05-29",0,188,-28,216,3,2,93,70,23,0,0],["2026-05-29",1,178,-27,204,3,1,205,-31,236,4,2],["2026-05-30",3,67,-10,77,0,0,85,8,78,0,0],["2026-05-30",4,138,185,-47,0,0,192,31,161,0,0],["2026-05-30",2,67,83,-16,3,2,100,106,-6,1,0],["2026-05-30",0,111,-17,128,1,0,87,-13,100,1,0],["2026-05-30",1,141,-21,162,6,5,143,-22,165,1,0],["2026-05-31",3,34,-5,40,0,0,113,56,57,0,0],["2026-05-31",4,133,35,98,0,0,192,-29,221,0,0],["2026-05-31",2,42,43,-1,1,1,180,26,154,0,0],["2026-05-31",0,141,-21,162,2,1,122,-18,140,2,1],["2026-05-31",1,83,-12,96,0,0,252,45,208,0,0],["2026-06-01",3,130,-19,149,6,1,144,-22,165,0,0],["2026-06-01",4,181,-27,208,0,0,196,47,149,0,0],["2026-06-01",2,104,-16,119,1,0,151,178,-27,0,0],["2026-06-01",0,229,-9,238,5,3,145,107,38,2,1],["2026-06-01",1,209,1,208,1,0,287,39,248,0,0],["2026-06-02",3,107,44,63,6,0,131,-20,151,2,0],["2026-06-02",4,157,94,63,0,0,182,6,176,0,0],["2026-06-02",2,62,-9,71,0,0,124,60,64,0,0],["2026-06-02",0,249,-37,286,8,1,125,39,86,5,0],["2026-06-02",1,166,109,57,2,1,263,10,253,0,0],["2026-06-03",3,110,14,96,2,1,117,-18,134,2,0],["2026-06-03",4,157,110,47,0,0,186,-28,214,0,0],["2026-06-03",2,149,99,50,2,1,89,103,-14,0,0],["2026-06-03",0,180,-27,207,6,2,123,12,110,0,0],["2026-06-03",1,259,73,187,3,1,229,-4,233,0,0],["2026-06-04",3,112,-17,128,3,1,107,15,92,5,0],["2026-06-04",4,156,288,-132,0,0,154,-23,177,0,0],["2026-06-04",2,155,37,118,0,0,80,33,47,0,0],["2026-06-04",0,259,49,211,3,2,104,102,2,2,1],["2026-06-04",1,229,-9,238,3,0,206,55,150,0,0],["2026-06-05",3,116,57,60,2,2,98,89,9,1,0],["2026-06-05",4,38,54,-16,0,0,141,63,78,0,0],["2026-06-05",2,116,-17,134,3,2,75,-11,86,0,0],["2026-06-05",0,243,-36,279,7,6,92,80,12,1,1],["2026-06-05",1,220,103,117,2,1,214,-3,217,0,0],["2026-06-06",3,19,-3,22,0,0,87,36,51,0,0],["2026-06-06",4,60,40,20,0,0,143,42,101,0,0],["2026-06-06",2,84,-13,96,0,0,65,-10,75,0,0],["2026-06-06",0,138,-21,159,4,1,87,12,75,1,0],["2026-06-06",1,79,-12,91,1,1,142,59,84,0,0],["2026-06-07",3,2,0,2,0,0,125,17,108,0,0],["2026-06-07",4,195,31,165,0,0,198,-30,228,0,0],["2026-06-07",2,70,84,-14,0,0,112,-17,129,0,0],["2026-06-07",0,158,100,59,3,1,121,10,111,3,0],["2026-06-07",1,59,-9,68,1,0,271,16,256,1,1],["2026-06-08",3,195,27,168,0,0,90,-13,103,1,0],["2026-06-08",4,300,-3,303,0,0,172,32,141,0,0],["2026-06-08",2,111,-17,127,1,0,83,45,38,1,0],["2026-06-08",0,359,138,222,9,3,115,218,-104,2,1],["2026-06-08",1,400,-35,435,3,0,269,17,252,0,0],["2026-06-09",4,225,122,102,0,0,199,28,172,0,0],["2026-06-09",0,247,-37,284,4,3,128,-19,147,3,2],["2026-06-09",1,325,-4,329,1,1,229,134,94,2,2],["2026-06-10",4,204,-6,210,0,0,197,190,8,0,0],["2026-06-10",0,229,-34,263,5,3,135,176,-41,5,3],["2026-06-10",1,229,115,114,4,1,260,157,102,1,1],["2026-06-11",7,0,0,0,0,0,0,0,0,0,0],["2026-06-11",4,152,37,114,0,0,177,-27,204,0,0],["2026-06-11",0,265,136,129,2,0,118,-18,135,3,1],["2026-06-11",1,188,0,187,2,1,177,7,170,2,1],["2026-06-11",6,0,0,0,0,0,0,0,0,0,0],["2026-06-12",4,23,-3,26,0,0,20,-3,23,0,0],["2026-06-12",0,226,-5,231,3,2,96,14,82,1,1],["2026-06-12",1,18,-3,20,0,0,21,50,-29,0,0],["2026-06-13",0,144,38,106,1,0,114,41,73,4,2],["2026-06-14",0,228,-34,262,4,2,139,-21,160,1,0],["2026-06-15",0,298,45,252,8,2,136,36,100,1,1],["2026-06-16",0,192,-29,221,7,2,118,295,-177,1,0],["2026-06-17",3,218,-33,250,1,0,143,-4,147,0,0],["2026-06-17",4,0,0,0,0,0,0,0,0,0,0],["2026-06-17",0,228,304,-76,5,2,138,90,47,2,0],["2026-06-17",6,88,47,41,0,0,93,-14,107,0,0],["2026-06-17",5,0,0,0,0,0,0,0,0,0,0],["2026-06-18",7,0,0,0,0,0,0,0,0,0,0],["2026-06-18",3,132,8,125,1,1,115,68,47,0,0],["2026-06-18",0,232,-35,267,3,0,126,40,86,2,0],["2026-06-18",6,118,126,-8,0,0,132,-20,152,0,0],["2026-06-18",5,82,-12,94,0,0,38,-6,43,0,0],["2026-06-19",3,99,-15,114,3,0,62,-9,71,0,0],["2026-06-19",4,76,-11,87,0,0,81,45,36,0,0],["2026-06-19",0,182,-27,209,5,2,116,-17,134,2,1],["2026-06-19",6,112,-17,129,1,0,131,-20,151,0,0],["2026-06-19",5,144,-22,165,0,0,137,-21,157,0,0],["2026-06-20",3,97,-15,112,1,0,86,58,29,1,0],["2026-06-20",4,45,113,-69,0,0,79,-12,91,0,0],["2026-06-20",0,115,-17,132,2,1,92,37,54,1,1],["2026-06-20",6,102,-15,117,0,0,121,-18,140,1,0],["2026-06-20",5,103,45,58,0,0,84,7,77,0,0],["2026-06-21",3,108,-16,124,2,2,130,-20,150,0,0],["2026-06-21",4,76,-11,87,0,0,102,93,9,0,0],["2026-06-21",0,152,2,150,0,0,143,-21,164,0,0],["2026-06-21",6,119,-18,137,1,0,136,-20,156,1,0],["2026-06-21",5,108,-16,124,0,0,153,98,55,0,0],["2026-06-22",3,98,45,53,2,2,151,34,117,1,0],["2026-06-22",4,88,248,-160,0,0,96,45,51,0,0],["2026-06-22",0,313,38,275,5,2,143,125,18,0,0],["2026-06-22",6,99,-15,114,1,0,151,-23,173,1,0],["2026-06-22",5,108,-16,124,0,0,140,-21,161,0,0],["2026-06-23",3,102,165,-62,0,0,143,88,55,0,0],["2026-06-23",4,131,40,90,0,0,105,-16,121,0,0],["2026-06-23",0,282,-42,324,2,0,139,-21,160,2,0],["2026-06-23",6,94,18,76,0,0,135,-20,156,0,0],["2026-06-23",5,51,-8,59,0,0,105,12,93,0,0],["2026-06-24",7,88,77,11,0,0,99,69,30,0,0],["2026-06-24",3,98,38,60,0,0,109,40,70,2,1],["2026-06-24",4,82,108,-26,0,0,91,-14,104,0,0],["2026-06-24",0,221,27,194,7,5,102,-15,117,2,0],["2026-06-24",6,71,78,-7,2,0,103,36,67,0,0],["2026-06-24",5,46,-7,53,0,0,66,64,2,0,0],["2026-06-25",7,84,74,10,0,0,107,11,96,0,0],["2026-06-25",3,94,51,43,0,0,102,43,60,0,0],["2026-06-25",4,98,13,85,0,0,68,-10,79,0,0],["2026-06-25",0,249,143,106,10,3,121,12,110,1,0],["2026-06-25",6,68,50,19,0,0,90,-14,104,0,0],["2026-06-25",5,45,31,13,0,0,64,186,-123,0,0],["2026-06-26",7,91,67,24,0,0,64,-10,74,0,0],["2026-06-26",3,102,4,98,1,1,102,-15,118,2,1],["2026-06-26",4,45,72,-28,0,0,66,44,21,0,0],["2026-06-26",0,167,-25,192,3,3,127,19,108,4,1],["2026-06-26",6,76,109,-32,0,0,60,-9,69,1,0],["2026-06-26",5,76,-11,87,0,0,48,12,36,0,0],["2026-06-27",7,75,114,-39,0,0,55,66,-10,0,0],["2026-06-27",3,86,-13,99,4,0,58,-9,67,1,1],["2026-06-27",4,29,-4,33,0,0,69,46,23,0,0],["2026-06-27",0,110,-17,127,3,0,80,39,41,3,0],["2026-06-27",6,71,-11,81,0,0,42,50,-9,0,0],["2026-06-27",5,51,155,-104,0,0,17,-3,19,0,0],["2026-06-28",7,76,-11,87,0,0,102,41,61,0,0],["2026-06-28",3,104,-16,120,2,1,145,-22,167,0,0],["2026-06-28",4,78,60,18,0,0,92,-14,106,0,0],["2026-06-28",0,207,11,196,4,2,139,-21,160,1,0],["2026-06-28",6,58,-9,67,0,0,72,71,1,0,0],["2026-06-28",5,53,-8,61,0,0,76,103,-27,0,0],["2026-06-29",7,77,205,-128,0,0,106,94,12,0,0],["2026-06-29",3,90,-14,104,3,0,149,90,60,1,1],["2026-06-29",4,86,12,74,0,0,105,-16,121,0,0],["2026-06-29",0,215,-32,247,8,4,158,-24,182,3,2],["2026-06-29",6,83,18,65,0,0,77,-11,88,0,0],["2026-06-29",5,41,38,3,0,0,91,41,50,0,0],["2026-06-30",7,77,81,-4,0,0,99,-15,113,0,0],["2026-06-30",3,88,-13,101,3,1,115,67,48,1,0],["2026-06-30",4,68,-10,78,0,0,100,98,2,0,0],["2026-06-30",0,211,-32,243,1,1,152,-23,175,3,2],["2026-06-30",6,64,50,13,0,0,69,-10,79,0,0],["2026-06-30",5,37,68,-30,0,0,69,20,48,0,0],["2026-07-01",7,76,104,-27,0,0,94,99,-4,0,0],["2026-07-01",3,105,29,75,2,1,123,-18,142,0,0],["2026-07-01",4,85,81,4,0,0,100,23,77,0,0],["2026-07-01",2,0,0,0,0,0,0,0,0,0,0],["2026-07-01",0,211,-32,243,8,6,144,16,129,2,2],["2026-07-01",1,81,-12,93,0,0,79,-12,91,0,0],["2026-07-01",6,65,93,-27,1,0,66,-10,76,0,0],["2026-07-01",5,31,-5,36,0,0,51,-8,59,0,0],["2026-07-02",7,96,127,-31,0,0,86,172,-86,0,0],["2026-07-02",3,110,-16,126,1,0,98,-15,112,1,0],["2026-07-02",4,89,-13,102,0,0,72,45,27,0,0],["2026-07-02",0,208,-31,239,8,1,117,69,48,0,0],["2026-07-02",1,81,-12,93,0,0,79,21,58,0,0],["2026-07-02",6,74,44,30,0,0,48,-7,55,0,0]];
+
+const FUNNEL_GOOGLE = [{"p_key":"2026-02","id_mp":"loga-internet","cliques":727,"sessoes":599,"clickoff":293,"redirect":116,"leads":86,"vendas":35},{"p_key":"2026-02","id_mp":"interplus internet","cliques":128,"sessoes":87,"clickoff":73,"redirect":22,"leads":4,"vendas":4},{"p_key":"2026-03","id_mp":"loga-internet","cliques":980,"sessoes":858,"clickoff":516,"redirect":211,"leads":133,"vendas":84},{"p_key":"2026-03","id_mp":"interplus internet","cliques":654,"sessoes":538,"clickoff":333,"redirect":112,"leads":33,"vendas":18},{"p_key":"2026-04","id_mp":"interplus internet","cliques":585,"sessoes":457,"clickoff":346,"redirect":103,"leads":32,"vendas":24},{"p_key":"2026-04","id_mp":"loga-internet","cliques":528,"sessoes":469,"clickoff":218,"redirect":117,"leads":82,"vendas":32},{"p_key":"2026-04","id_mp":"direct internet","cliques":462,"sessoes":362,"clickoff":105,"redirect":46,"leads":24,"vendas":5},{"p_key":"2026-04","id_mp":"the fiber internet","cliques":448,"sessoes":347,"clickoff":165,"redirect":67,"leads":36,"vendas":22},{"p_key":"2026-05","id_mp":"direct internet","cliques":785,"sessoes":682,"clickoff":200,"redirect":105,"leads":57,"vendas":18},{"p_key":"2026-05","id_mp":"the fiber internet","cliques":724,"sessoes":646,"clickoff":311,"redirect":131,"leads":73,"vendas":37},{"p_key":"2026-05","id_mp":"loga-internet","cliques":577,"sessoes":544,"clickoff":295,"redirect":152,"leads":130,"vendas":52},{"p_key":"2026-05","id_mp":"unifique","cliques":544,"sessoes":446,"clickoff":164,"redirect":44,"leads":5,"vendas":1},{"p_key":"2026-05","id_mp":"interplus internet","cliques":487,"sessoes":421,"clickoff":272,"redirect":91,"leads":33,"vendas":21},{"p_key":"2026-05","id_mp":"enove-fibra","cliques":331,"sessoes":164,"clickoff":101,"redirect":30,"leads":4,"vendas":2},{"p_key":"2026-06","id_mp":"loga-internet","cliques":818,"sessoes":673,"clickoff":360,"redirect":185,"leads":136,"vendas":50},{"p_key":"2026-06","id_mp":"direct internet","cliques":680,"sessoes":529,"clickoff":141,"redirect":64,"leads":39,"vendas":12},{"p_key":"2026-06","id_mp":"enove-fibra","cliques":521,"sessoes":417,"clickoff":202,"redirect":54,"leads":5,"vendas":2},{"p_key":"2026-06","id_mp":"the fiber internet","cliques":342,"sessoes":306,"clickoff":187,"redirect":52,"leads":23,"vendas":7},{"p_key":"2026-06","id_mp":"unifique","cliques":270,"sessoes":199,"clickoff":51,"redirect":10,"leads":1,"vendas":0},{"p_key":"2026-06","id_mp":"ultranet-network","cliques":230,"sessoes":161,"clickoff":59,"redirect":19,"leads":5,"vendas":0},{"p_key":"2026-06","id_mp":"interplus internet","cliques":119,"sessoes":112,"clickoff":53,"redirect":15,"leads":7,"vendas":3},{"p_key":"2026-06","id_mp":"ativa-telecom","cliques":104,"sessoes":66,"clickoff":65,"redirect":19,"leads":null,"vendas":null},{"p_key":"2026-07","id_mp":"direct internet","cliques":81,"sessoes":39,"leads":2,"vendas":1,"clickoff":12,"redirect":5},{"p_key":"2026-07","id_mp":"loga-internet","cliques":64,"sessoes":32,"leads":8,"vendas":6,"clickoff":15,"redirect":8},{"p_key":"2026-07","id_mp":"enove-fibra","cliques":47,"sessoes":22,"leads":null,"vendas":null,"clickoff":9,"redirect":3},{"p_key":"2026-07","id_mp":"ativa-telecom","cliques":38,"sessoes":12,"leads":null,"vendas":null,"clickoff":8,"redirect":2},{"p_key":"2026-07","id_mp":"ultranet-network","cliques":34,"sessoes":9,"leads":1,"vendas":0,"clickoff":5,"redirect":2},{"p_key":"2026-07","id_mp":"the fiber internet","cliques":15,"sessoes":4,"leads":null,"vendas":null,"clickoff":1,"redirect":1},{"p_key":"2026-07","id_mp":"unifique","cliques":11,"sessoes":12,"leads":null,"vendas":null,"clickoff":3,"redirect":null},{"p_key":"2026-07","id_mp":"interplus internet","cliques":null,"sessoes":null,"leads":null,"vendas":null,"clickoff":null,"redirect":null},{"p_key":"30d","id_mp":"loga-internet","cliques":832,"sessoes":684,"leads":132,"vendas":60,"clickoff":360,"redirect":183},{"p_key":"30d","id_mp":"direct internet","cliques":679,"sessoes":535,"leads":32,"vendas":13,"clickoff":132,"redirect":56},{"p_key":"30d","id_mp":"enove-fibra","cliques":511,"sessoes":417,"leads":5,"vendas":2,"clickoff":197,"redirect":53},{"p_key":"30d","id_mp":"the fiber internet","cliques":285,"sessoes":246,"leads":20,"vendas":6,"clickoff":143,"redirect":41},{"p_key":"30d","id_mp":"unifique","cliques":281,"sessoes":224,"leads":1,"vendas":0,"clickoff":60,"redirect":12},{"p_key":"30d","id_mp":"ultranet-network","cliques":264,"sessoes":189,"leads":6,"vendas":0,"clickoff":71,"redirect":22},{"p_key":"30d","id_mp":"ativa-telecom","cliques":142,"sessoes":101,"leads":null,"vendas":null,"clickoff":89,"redirect":23},{"p_key":"30d","id_mp":"interplus internet","cliques":84,"sessoes":80,"leads":6,"vendas":3,"clickoff":39,"redirect":13},{"p_key":"7d","id_mp":"direct internet","cliques":261,"sessoes":191,"leads":15,"vendas":4,"clickoff":51,"redirect":24},{"p_key":"7d","id_mp":"loga-internet","cliques":184,"sessoes":127,"leads":27,"vendas":16,"clickoff":77,"redirect":33},{"p_key":"7d","id_mp":"enove-fibra","cliques":122,"sessoes":96,"leads":null,"vendas":null,"clickoff":35,"redirect":10},{"p_key":"7d","id_mp":"ultranet-network","cliques":122,"sessoes":84,"leads":1,"vendas":0,"clickoff":29,"redirect":7},{"p_key":"7d","id_mp":"ativa-telecom","cliques":118,"sessoes":80,"leads":null,"vendas":null,"clickoff":69,"redirect":17},{"p_key":"7d","id_mp":"unifique","cliques":82,"sessoes":67,"leads":null,"vendas":null,"clickoff":23,"redirect":6},{"p_key":"7d","id_mp":"the fiber internet","cliques":15,"sessoes":4,"leads":null,"vendas":null,"clickoff":1,"redirect":1},{"p_key":"7d","id_mp":"interplus internet","cliques":null,"sessoes":null,"leads":null,"vendas":null,"clickoff":null,"redirect":null},{"p_key":"90d","id_mp":"direct internet","cliques":2008,"sessoes":1692,"leads":125,"vendas":37,"clickoff":462,"redirect":223},{"p_key":"90d","id_mp":"loga-internet","cliques":1918,"sessoes":1711,"leads":352,"vendas":149,"clickoff":869,"redirect":453},{"p_key":"90d","id_mp":"the fiber internet","cliques":1529,"sessoes":1354,"leads":139,"vendas":68,"clickoff":691,"redirect":265},{"p_key":"90d","id_mp":"interplus internet","cliques":1132,"sessoes":967,"leads":70,"vendas":47,"clickoff":646,"redirect":200},{"p_key":"90d","id_mp":"enove-fibra","cliques":899,"sessoes":636,"leads":9,"vendas":4,"clickoff":320,"redirect":90},{"p_key":"90d","id_mp":"unifique","cliques":825,"sessoes":670,"leads":6,"vendas":1,"clickoff":224,"redirect":56},{"p_key":"90d","id_mp":"ultranet-network","cliques":264,"sessoes":189,"leads":6,"vendas":0,"clickoff":71,"redirect":22},{"p_key":"90d","id_mp":"ativa-telecom","cliques":142,"sessoes":101,"leads":null,"vendas":null,"clickoff":89,"redirect":23}];
+
+const FUNNEL_META = [{"p_key":"2026-02","id_mp":"loga-internet","cliques":1675,"chat_start":453,"zip_search":389,"redirect":223,"leads":87,"vendas":47},{"p_key":"2026-02","id_mp":"interplus internet","cliques":202,"chat_start":40,"zip_search":36,"redirect":20,"leads":2,"vendas":2},{"p_key":"2026-03","id_mp":"loga-internet","cliques":2724,"chat_start":648,"zip_search":516,"redirect":259,"leads":137,"vendas":59},{"p_key":"2026-03","id_mp":"interplus internet","cliques":1537,"chat_start":331,"zip_search":273,"redirect":162,"leads":8,"vendas":6},{"p_key":"2026-04","id_mp":"loga-internet","cliques":1667,"chat_start":341,"zip_search":268,"redirect":147,"leads":94,"vendas":32},{"p_key":"2026-04","id_mp":"interplus internet","cliques":1356,"chat_start":315,"zip_search":268,"redirect":165,"leads":6,"vendas":1},{"p_key":"2026-05","id_mp":"loga-internet","cliques":1538,"chat_start":357,"zip_search":252,"redirect":132,"leads":70,"vendas":28},{"p_key":"2026-05","id_mp":"the fiber internet","cliques":1256,"chat_start":242,"zip_search":158,"redirect":133,"leads":24,"vendas":15},{"p_key":"2026-05","id_mp":"direct internet","cliques":999,"chat_start":233,"zip_search":192,"redirect":87,"leads":16,"vendas":2},{"p_key":"2026-05","id_mp":"interplus internet","cliques":953,"chat_start":223,"zip_search":170,"redirect":110,"leads":6,"vendas":2},{"p_key":"2026-05","id_mp":"enove-fibra","cliques":689,"chat_start":145,"zip_search":146,"redirect":79,"leads":3,"vendas":1},{"p_key":"2026-05","id_mp":"unifique","cliques":547,"chat_start":97,"zip_search":77,"redirect":68,"leads":15,"vendas":3},{"p_key":"2026-06","id_mp":"loga-internet","cliques":1354,"chat_start":345,"zip_search":233,"redirect":101,"leads":57,"vendas":17},{"p_key":"2026-06","id_mp":"enove-fibra","cliques":1022,"chat_start":71,"zip_search":45,"redirect":31,"leads":5,"vendas":1},{"p_key":"2026-06","id_mp":"the fiber internet","cliques":398,"chat_start":93,"zip_search":54,"redirect":42,"leads":6,"vendas":5},{"p_key":"2026-06","id_mp":"direct internet","cliques":585,"chat_start":144,"zip_search":120,"redirect":66,"leads":19,"vendas":3},{"p_key":"2026-06","id_mp":"ultranet-network","cliques":415,"chat_start":41,"zip_search":20,"redirect":11,"leads":4,"vendas":0},{"p_key":"2026-06","id_mp":"unifique","cliques":192,"chat_start":32,"zip_search":32,"redirect":16,"leads":null,"vendas":null},{"p_key":"2026-06","id_mp":"interplus internet","cliques":186,"chat_start":52,"zip_search":27,"redirect":19,"leads":1,"vendas":0},{"p_key":"2026-06","id_mp":"ativa-telecom","cliques":95,"chat_start":null,"zip_search":null,"redirect":null,"leads":null,"vendas":null},{"p_key":"2026-07","id_mp":"loga-internet","invest":261.0813887307911,"cliques":69,"zip_search":6,"get_plans":6,"red_anunc":2,"red_cashback":0,"leads":2,"vendas":2,"cpl":130.5,"cac":130.5,"pct_cashback":0,"chat_start":13,"redirect":2},{"p_key":"2026-07","id_mp":"direct internet","invest":220.76266363118953,"cliques":27,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":2,"redirect":null},{"p_key":"2026-07","id_mp":"ativa-telecom","invest":180.0113830392715,"cliques":31,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null},{"p_key":"2026-07","id_mp":"enove-fibra","invest":171.792828685259,"cliques":67,"zip_search":5,"get_plans":5,"red_anunc":0,"red_cashback":2,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":100,"chat_start":7,"redirect":2},{"p_key":"2026-07","id_mp":"the fiber internet","invest":158.33807626636312,"cliques":34,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null},{"p_key":"2026-07","id_mp":"ultranet-network","invest":113.4889015367103,"cliques":31,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":3,"redirect":null},{"p_key":"2026-07","id_mp":"unifique","invest":51.37165623221401,"cliques":8,"zip_search":3,"get_plans":3,"red_anunc":0,"red_cashback":2,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":100,"chat_start":2,"redirect":2},{"p_key":"2026-07","id_mp":"interplus internet","invest":0,"cliques":null,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null},{"p_key":"30d","id_mp":"loga-internet","invest":3661.548093340922,"cliques":1338,"zip_search":220,"get_plans":220,"red_anunc":53,"red_cashback":41,"leads":55,"vendas":22,"cpl":66.58,"cac":166.45,"pct_cashback":43.6,"chat_start":342,"redirect":94},{"p_key":"30d","id_mp":"enove-fibra","invest":2815.9134889015368,"cliques":979,"zip_search":48,"get_plans":48,"red_anunc":7,"red_cashback":19,"leads":6,"vendas":1,"cpl":469.33,"cac":2816,"pct_cashback":73.1,"chat_start":69,"redirect":26},{"p_key":"30d","id_mp":"direct internet","invest":2457.9852020489475,"cliques":528,"zip_search":104,"get_plans":104,"red_anunc":35,"red_cashback":30,"leads":18,"vendas":4,"cpl":136.56,"cac":614.5,"pct_cashback":46.2,"chat_start":129,"redirect":65},{"p_key":"30d","id_mp":"the fiber internet","invest":2175.924871940808,"cliques":351,"zip_search":43,"get_plans":43,"red_anunc":10,"red_cashback":28,"leads":6,"vendas":5,"cpl":362.67,"cac":435.2,"pct_cashback":73.7,"chat_start":78,"redirect":38},{"p_key":"30d","id_mp":"ultranet-network","invest":1525.9077973819012,"cliques":446,"zip_search":20,"get_plans":20,"red_anunc":6,"red_cashback":5,"leads":4,"vendas":0,"cpl":381.5,"cac":null,"pct_cashback":45.5,"chat_start":47,"redirect":11},{"p_key":"30d","id_mp":"unifique","invest":1138.030734206033,"cliques":200,"zip_search":36,"get_plans":36,"red_anunc":0,"red_cashback":19,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":100,"chat_start":37,"redirect":19},{"p_key":"30d","id_mp":"ativa-telecom","invest":812.4985771200911,"cliques":126,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null},{"p_key":"30d","id_mp":"interplus internet","invest":504.81502561183834,"cliques":133,"zip_search":17,"get_plans":17,"red_anunc":1,"red_cashback":7,"leads":1,"vendas":0,"cpl":505,"cac":null,"pct_cashback":87.5,"chat_start":39,"redirect":8},{"p_key":"7d","id_mp":"loga-internet","invest":917.5754126351734,"cliques":319,"zip_search":43,"get_plans":43,"red_anunc":13,"red_cashback":3,"leads":16,"vendas":7,"cpl":57.38,"cac":131.14,"pct_cashback":18.8,"chat_start":72,"redirect":16},{"p_key":"7d","id_mp":"direct internet","invest":791.1895276038701,"cliques":91,"zip_search":16,"get_plans":16,"red_anunc":5,"red_cashback":5,"leads":5,"vendas":3,"cpl":158.2,"cac":263.67,"pct_cashback":50,"chat_start":17,"redirect":10},{"p_key":"7d","id_mp":"ativa-telecom","invest":606.260671599317,"cliques":91,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null},{"p_key":"7d","id_mp":"enove-fibra","invest":604.0295959021059,"cliques":198,"zip_search":15,"get_plans":15,"red_anunc":5,"red_cashback":5,"leads":4,"vendas":1,"cpl":151,"cac":604,"pct_cashback":50,"chat_start":20,"redirect":10},{"p_key":"7d","id_mp":"ultranet-network","invest":433.1587933978372,"cliques":129,"zip_search":6,"get_plans":6,"red_anunc":1,"red_cashback":3,"leads":1,"vendas":0,"cpl":433,"cac":null,"pct_cashback":75,"chat_start":20,"redirect":4},{"p_key":"7d","id_mp":"unifique","invest":351.770062606716,"cliques":66,"zip_search":12,"get_plans":12,"red_anunc":0,"red_cashback":8,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":100,"chat_start":14,"redirect":8},{"p_key":"7d","id_mp":"the fiber internet","invest":158.33807626636312,"cliques":34,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null},{"p_key":"7d","id_mp":"interplus internet","invest":0,"cliques":null,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null},{"p_key":"90d","id_mp":"the fiber internet","invest":15959.829254410935,"cliques":2335,"zip_search":219,"get_plans":219,"red_anunc":39,"red_cashback":138,"leads":30,"vendas":20,"cpl":532,"cac":798,"pct_cashback":78,"chat_start":341,"redirect":177},{"p_key":"90d","id_mp":"loga-internet","invest":12999.692657939668,"cliques":4399,"zip_search":754,"get_plans":754,"red_anunc":201,"red_cashback":170,"leads":215,"vendas":81,"cpl":60.47,"cac":160.49,"pct_cashback":45.8,"chat_start":1052,"redirect":371},{"p_key":"90d","id_mp":"interplus internet","invest":10820.216277746154,"cliques":2363,"zip_search":457,"get_plans":457,"red_anunc":16,"red_cashback":268,"leads":14,"vendas":4,"cpl":772.86,"cac":2705,"pct_cashback":94.4,"chat_start":565,"redirect":284},{"p_key":"90d","id_mp":"direct internet","invest":7224.018212862838,"cliques":1856,"zip_search":318,"get_plans":318,"red_anunc":62,"red_cashback":96,"leads":36,"vendas":6,"cpl":200.67,"cac":1204,"pct_cashback":60.8,"chat_start":387,"redirect":158},{"p_key":"90d","id_mp":"enove-fibra","invest":5986.158224245874,"cliques":1778,"zip_search":205,"get_plans":205,"red_anunc":16,"red_cashback":100,"leads":10,"vendas":2,"cpl":598.6,"cac":2993,"pct_cashback":86.2,"chat_start":233,"redirect":116},{"p_key":"90d","id_mp":"unifique","invest":4263.175867956745,"cliques":747,"zip_search":113,"get_plans":113,"red_anunc":25,"red_cashback":62,"leads":15,"vendas":3,"cpl":284.2,"cac":1421,"pct_cashback":71.3,"chat_start":134,"redirect":87},{"p_key":"90d","id_mp":"ultranet-network","invest":1525.9077973819012,"cliques":446,"zip_search":20,"get_plans":20,"red_anunc":6,"red_cashback":5,"leads":4,"vendas":0,"cpl":381.5,"cac":null,"pct_cashback":45.5,"chat_start":47,"redirect":11},{"p_key":"90d","id_mp":"ativa-telecom","invest":812.4985771200911,"cliques":126,"zip_search":null,"get_plans":null,"red_anunc":null,"red_cashback":null,"leads":null,"vendas":null,"cpl":null,"cac":null,"pct_cashback":null,"chat_start":null,"redirect":null}];
+
+const PREV_SNAPSHOT = [{"period_key":"7d_prev","id_mp":"ativa-telecom","canal":"meta","bruto":99,"cashback":69,"liquido":29},{"period_key":"7d_prev","id_mp":"ativa-telecom","canal":"google","bruto":87,"cashback":76,"liquido":10},{"period_key":"7d_prev","id_mp":"direct internet","canal":"google","bruto":732,"cashback":210,"liquido":522},{"period_key":"7d_prev","id_mp":"direct internet","canal":"meta","bruto":795,"cashback":256,"liquido":535},{"period_key":"7d_prev","id_mp":"loga-internet","canal":"google","bruto":1493,"cashback":-54,"liquido":1547},{"period_key":"7d_prev","id_mp":"loga-internet","canal":"meta","bruto":856,"cashback":128,"liquido":729},{"period_key":"7d_prev","id_mp":"ultranet-network","canal":"google","bruto":711,"cashback":158,"liquido":558},{"period_key":"7d_prev","id_mp":"ultranet-network","canal":"meta","bruto":906,"cashback":-82,"liquido":991},{"period_key":"7d_prev","id_mp":"unifique","canal":"google","bruto":637,"cashback":-34,"liquido":673},{"period_key":"7d_prev","id_mp":"unifique","canal":"meta","bruto":719,"cashback":133,"liquido":585},{"period_key":"7d_prev","id_mp":"enove-fibra","canal":"google","bruto":493,"cashback":485,"liquido":12},{"period_key":"7d_prev","id_mp":"enove-fibra","canal":"meta","bruto":551,"cashback":143,"liquido":410},{"period_key":"30d_prev","id_mp":"direct internet","canal":"google","bruto":3015,"cashback":282,"liquido":2744},{"period_key":"30d_prev","id_mp":"direct internet","canal":"meta","bruto":3426,"cashback":1199,"liquido":2222},{"period_key":"30d_prev","id_mp":"interplus internet","canal":"google","bruto":2963,"cashback":1215,"liquido":1749},{"period_key":"30d_prev","id_mp":"interplus internet","canal":"meta","bruto":4555,"cashback":2919,"liquido":1635},{"period_key":"30d_prev","id_mp":"loga-internet","canal":"google","bruto":5155,"cashback":-382,"liquido":5550},{"period_key":"30d_prev","id_mp":"loga-internet","canal":"meta","bruto":4459,"cashback":1192,"liquido":3258},{"period_key":"30d_prev","id_mp":"the fiber internet","canal":"google","bruto":4164,"cashback":185,"liquido":3991},{"period_key":"30d_prev","id_mp":"the fiber internet","canal":"meta","bruto":9033,"cashback":2809,"liquido":6211},{"period_key":"30d_prev","id_mp":"unifique","canal":"google","bruto":2654,"cashback":136,"liquido":2524},{"period_key":"30d_prev","id_mp":"unifique","canal":"meta","bruto":3115,"cashback":733,"liquido":2377},{"period_key":"30d_prev","id_mp":"enove-fibra","canal":"google","bruto":2721,"cashback":594,"liquido":2129},{"period_key":"30d_prev","id_mp":"enove-fibra","canal":"meta","bruto":2981,"cashback":2491,"liquido":492},{"period_key":"90d_prev","id_mp":"loga-internet","canal":"meta","bruto":14153,"cashback":5158,"liquido":8977},{"period_key":"90d_prev","id_mp":"loga-internet","canal":"google","bruto":9311,"cashback":-214,"liquido":9539},{"period_key":"90d_prev","id_mp":"interplus internet","canal":"google","bruto":5738,"cashback":3373,"liquido":2365},{"period_key":"90d_prev","id_mp":"interplus internet","canal":"meta","bruto":7699,"cashback":6052,"liquido":1640}];
+
+const PREV_FUNNEL_GOOGLE = [{"p_key":"7d_prev","id_mp":"loga-internet","cliques":211,"sessoes":255,"clickoff":153,"redirect":71,"leads":37,"vendas":11},{"p_key":"7d_prev","id_mp":"direct internet","cliques":217,"sessoes":191,"clickoff":51,"redirect":23,"leads":10,"vendas":1},{"p_key":"7d_prev","id_mp":"ultranet-network","cliques":134,"sessoes":97,"clickoff":33,"redirect":10,"leads":2,"vendas":0},{"p_key":"7d_prev","id_mp":"unifique","cliques":106,"sessoes":80,"clickoff":27,"redirect":8,"leads":0,"vendas":0},{"p_key":"30d_prev","id_mp":"direct internet","cliques":785,"sessoes":694,"clickoff":200,"redirect":105,"leads":57,"vendas":18},{"p_key":"30d_prev","id_mp":"loga-internet","cliques":577,"sessoes":945,"clickoff":413,"redirect":210,"leads":132,"vendas":53},{"p_key":"30d_prev","id_mp":"unifique","cliques":544,"sessoes":446,"clickoff":164,"redirect":44,"leads":0,"vendas":0},{"p_key":"30d_prev","id_mp":"interplus internet","cliques":487,"sessoes":425,"clickoff":276,"redirect":94,"leads":34,"vendas":22},{"p_key":"90d_prev","id_mp":"loga-internet","cliques":1890,"sessoes":2438,"clickoff":1122,"redirect":577,"leads":353,"vendas":138},{"p_key":"90d_prev","id_mp":"interplus internet","cliques":1191,"sessoes":1006,"clickoff":678,"redirect":212,"leads":73,"vendas":49}];
+
+const PREV_FUNNEL_META = [{"p_key":"7d_prev","id_mp":"loga-internet","cliques":301,"chat_start":85,"zip_search":51,"redirect":17,"leads":16,"vendas":2},{"p_key":"7d_prev","id_mp":"ultranet-network","cliques":152,"chat_start":21,"zip_search":8,"redirect":5,"leads":1,"vendas":0},{"p_key":"7d_prev","id_mp":"direct internet","cliques":101,"chat_start":23,"zip_search":26,"redirect":16,"leads":6,"vendas":3},{"p_key":"7d_prev","id_mp":"enove-fibra","cliques":0,"chat_start":14,"zip_search":4,"redirect":4,"leads":2,"vendas":0},{"p_key":"30d_prev","id_mp":"loga-internet","cliques":1344,"chat_start":345,"zip_search":233,"redirect":101,"leads":57,"vendas":17},{"p_key":"30d_prev","id_mp":"enove-fibra","cliques":0,"chat_start":71,"zip_search":45,"redirect":31,"leads":5,"vendas":1},{"p_key":"30d_prev","id_mp":"the fiber internet","cliques":0,"chat_start":93,"zip_search":54,"redirect":42,"leads":6,"vendas":5},{"p_key":"30d_prev","id_mp":"direct internet","cliques":616,"chat_start":144,"zip_search":120,"redirect":66,"leads":19,"vendas":3},{"p_key":"90d_prev","id_mp":"loga-internet","cliques":4501,"chat_start":1077,"zip_search":777,"redirect":387,"leads":225,"vendas":71},{"p_key":"90d_prev","id_mp":"interplus internet","cliques":2495,"chat_start":604,"zip_search":484,"redirect":304,"leads":13,"vendas":4}];
+
+const PARTNER_WEEKLY = {"the fiber internet":[{"ws":"2026-04-27","bruto":3067,"cashback":748,"liquido":2319,"cliques_g":129,"cliques_m":402,"clickoff_g":55,"chat_start_m":0,"leads_g":18,"vendas_g":9,"leads_m":0,"vendas_m":0},{"ws":"2026-05-04","bruto":3003,"cashback":888,"liquido":2115,"cliques_g":123,"cliques_m":399,"clickoff_g":66,"chat_start_m":63,"leads_g":16,"vendas_g":7,"leads_m":5,"vendas_m":4},{"ws":"2026-05-11","bruto":3082,"cashback":1065,"liquido":2016,"cliques_g":130,"cliques_m":262,"clickoff_g":43,"chat_start_m":81,"leads_g":9,"vendas_g":4,"leads_m":7,"vendas_m":3},{"ws":"2026-05-18","bruto":3192,"cashback":765,"liquido":2427,"cliques_g":192,"cliques_m":226,"clickoff_g":90,"chat_start_m":59,"leads_g":24,"vendas_g":12,"leads_m":6,"vendas_m":6},{"ws":"2026-05-25","bruto":1410,"cashback":15,"liquido":1395,"cliques_g":116,"cliques_m":106,"clickoff_g":60,"chat_start_m":25,"leads_g":13,"vendas_g":7,"leads_m":5,"vendas_m":2},{"ws":"2026-06-01","bruto":2835,"cashback":429,"liquido":2406,"cliques_g":214,"cliques_m":261,"clickoff_g":134,"chat_start_m":56,"leads_g":13,"vendas_g":4,"leads_m":1,"vendas_m":1},{"ws":"2026-06-08","bruto":2115,"cashback":440,"liquido":1675,"cliques_g":128,"cliques_m":137,"clickoff_g":53,"chat_start_m":35,"leads_g":10,"vendas_g":3,"leads_m":5,"vendas_m":4},{"ws":"2026-06-29","bruto":320,"cashback":-15,"liquido":335,"cliques_g":15,"cliques_m":34,"clickoff_g":1,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0}],"loga-internet":[{"ws":"2026-04-27","bruto":1991,"cashback":576,"liquido":1415,"cliques_g":106,"cliques_m":484,"clickoff_g":37,"chat_start_m":90,"leads_g":16,"vendas_g":7,"leads_m":12,"vendas_m":3},{"ws":"2026-05-04","bruto":2181,"cashback":61,"liquido":2120,"cliques_g":150,"cliques_m":368,"clickoff_g":89,"chat_start_m":76,"leads_g":36,"vendas_g":14,"leads_m":16,"vendas_m":5},{"ws":"2026-05-11","bruto":2295,"cashback":300,"liquido":1995,"cliques_g":148,"cliques_m":331,"clickoff_g":77,"chat_start_m":84,"leads_g":25,"vendas_g":8,"leads_m":16,"vendas_m":7},{"ws":"2026-05-18","bruto":2267,"cashback":136,"liquido":2130,"cliques_g":109,"cliques_m":276,"clickoff_g":57,"chat_start_m":86,"leads_g":28,"vendas_g":12,"leads_m":17,"vendas_m":6},{"ws":"2026-05-25","bruto":1074,"cashback":56,"liquido":1017,"cliques_g":49,"cliques_m":131,"clickoff_g":13,"chat_start_m":35,"leads_g":12,"vendas_g":6,"leads_m":8,"vendas_m":4},{"ws":"2026-06-01","bruto":2251,"cashback":380,"liquido":1871,"cliques_g":145,"cliques_m":301,"clickoff_g":64,"chat_start_m":81,"leads_g":36,"vendas_g":16,"leads_m":14,"vendas_m":3},{"ws":"2026-06-08","bruto":2543,"cashback":593,"liquido":1950,"cliques_g":186,"cliques_m":330,"clickoff_g":80,"chat_start_m":79,"leads_g":28,"vendas_g":13,"leads_m":19,"vendas_m":10},{"ws":"2026-06-15","bruto":2267,"cashback":703,"liquido":1564,"cliques_g":195,"cliques_m":306,"clickoff_g":87,"chat_start_m":81,"leads_g":30,"vendas_g":9,"leads_m":9,"vendas_m":3},{"ws":"2026-06-22","bruto":2399,"cashback":273,"liquido":2126,"cliques_g":231,"cliques_m":313,"clickoff_g":111,"chat_start_m":89,"leads_g":34,"vendas_g":15,"leads_m":13,"vendas_m":1},{"ws":"2026-06-29","bruto":1417,"cashback":-88,"liquido":1505,"cliques_g":125,"cliques_m":175,"clickoff_g":39,"chat_start_m":39,"leads_g":17,"vendas_g":11,"leads_m":8,"vendas_m":6}],"interplus internet":[{"ws":"2026-04-27","bruto":1685,"cashback":648,"liquido":1037,"cliques_g":117,"cliques_m":221,"clickoff_g":69,"chat_start_m":47,"leads_g":7,"vendas_g":6,"leads_m":3,"vendas_m":1},{"ws":"2026-05-04","bruto":1679,"cashback":758,"liquido":921,"cliques_g":104,"cliques_m":262,"clickoff_g":58,"chat_start_m":59,"leads_g":3,"vendas_g":1,"leads_m":4,"vendas_m":2},{"ws":"2026-05-11","bruto":1799,"cashback":968,"liquido":830,"cliques_g":133,"cliques_m":212,"clickoff_g":82,"chat_start_m":50,"leads_g":8,"vendas_g":5,"leads_m":0,"vendas_m":0},{"ws":"2026-05-18","bruto":1732,"cashback":1072,"liquido":660,"cliques_g":104,"cliques_m":181,"clickoff_g":59,"chat_start_m":52,"leads_g":12,"vendas_g":8,"leads_m":0,"vendas_m":0},{"ws":"2026-05-25","bruto":820,"cashback":429,"liquido":392,"cliques_g":49,"cliques_m":112,"clickoff_g":28,"chat_start_m":22,"leads_g":6,"vendas_g":4,"leads_m":1,"vendas_m":0},{"ws":"2026-06-01","bruto":1436,"cashback":502,"liquido":935,"cliques_g":105,"cliques_m":161,"clickoff_g":40,"chat_start_m":39,"leads_g":6,"vendas_g":3,"leads_m":0,"vendas_m":0},{"ws":"2026-06-08","bruto":194,"cashback":28,"liquido":165,"cliques_g":14,"cliques_m":25,"clickoff_g":13,"chat_start_m":13,"leads_g":1,"vendas_g":0,"leads_m":1,"vendas_m":0},{"ws":"2026-06-29","bruto":0,"cashback":0,"liquido":0,"cliques_g":0,"cliques_m":0,"clickoff_g":0,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0}],"direct internet":[{"ws":"2026-04-27","bruto":1460,"cashback":1201,"liquido":260,"cliques_g":205,"cliques_m":245,"clickoff_g":34,"chat_start_m":0,"leads_g":7,"vendas_g":2,"leads_m":0,"vendas_m":0},{"ws":"2026-05-04","bruto":1433,"cashback":148,"liquido":1285,"cliques_g":146,"cliques_m":235,"clickoff_g":49,"chat_start_m":51,"leads_g":17,"vendas_g":5,"leads_m":5,"vendas_m":1},{"ws":"2026-05-11","bruto":1564,"cashback":242,"liquido":1322,"cliques_g":193,"cliques_m":210,"clickoff_g":85,"chat_start_m":58,"leads_g":27,"vendas_g":9,"leads_m":10,"vendas_m":1},{"ws":"2026-05-18","bruto":1400,"cashback":588,"liquido":812,"cliques_g":188,"cliques_m":206,"clickoff_g":24,"chat_start_m":68,"leads_g":6,"vendas_g":2,"leads_m":1,"vendas_m":0},{"ws":"2026-05-25","bruto":682,"cashback":77,"liquido":605,"cliques_g":84,"cliques_m":119,"clickoff_g":5,"chat_start_m":28,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-01","bruto":1404,"cashback":174,"liquido":1231,"cliques_g":207,"cliques_m":316,"clickoff_g":56,"chat_start_m":85,"leads_g":19,"vendas_g":5,"leads_m":10,"vendas_m":0},{"ws":"2026-06-08","bruto":285,"cashback":14,"liquido":271,"cliques_g":34,"cliques_m":20,"clickoff_g":5,"chat_start_m":6,"leads_g":0,"vendas_g":0,"leads_m":1,"vendas_m":0},{"ws":"2026-06-15","bruto":1191,"cashback":22,"liquido":1169,"cliques_g":151,"cliques_m":132,"clickoff_g":23,"chat_start_m":27,"leads_g":8,"vendas_g":3,"leads_m":1,"vendas_m":0},{"ws":"2026-06-22","bruto":1497,"cashback":434,"liquido":1063,"cliques_g":202,"cliques_m":89,"clickoff_g":44,"chat_start_m":21,"leads_g":9,"vendas_g":4,"leads_m":6,"vendas_m":3},{"ws":"2026-06-29","bruto":878,"cashback":110,"liquido":768,"cliques_g":167,"cliques_m":55,"clickoff_g":29,"chat_start_m":11,"leads_g":8,"vendas_g":2,"leads_m":2,"vendas_m":1}],"unifique":[{"ws":"2026-04-27","bruto":0,"cashback":0,"liquido":0,"cliques_g":0,"cliques_m":0,"clickoff_g":0,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-05-04","bruto":1426,"cashback":455,"liquido":971,"cliques_g":140,"cliques_m":174,"clickoff_g":47,"chat_start_m":22,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-05-11","bruto":788,"cashback":-8,"liquido":796,"cliques_g":89,"cliques_m":45,"clickoff_g":27,"chat_start_m":8,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-05-18","bruto":2475,"cashback":190,"liquido":2285,"cliques_g":235,"cliques_m":231,"clickoff_g":72,"chat_start_m":47,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-05-25","bruto":93,"cashback":-14,"liquido":107,"cliques_g":15,"cliques_m":4,"clickoff_g":3,"chat_start_m":2,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-15","bruto":847,"cashback":74,"liquido":773,"cliques_g":115,"cliques_m":91,"clickoff_g":20,"chat_start_m":10,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-22","bruto":945,"cashback":489,"liquido":456,"cliques_g":128,"cliques_m":76,"clickoff_g":29,"chat_start_m":16,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-29","bruto":320,"cashback":155,"liquido":166,"cliques_g":38,"cliques_m":33,"clickoff_g":11,"chat_start_m":11,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0}],"enove-fibra":[{"ws":"2026-05-11","bruto":898,"cashback":288,"liquido":609,"cliques_g":60,"cliques_m":97,"clickoff_g":1,"chat_start_m":31,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-05-18","bruto":1988,"cashback":1481,"liquido":507,"cliques_g":119,"cliques_m":229,"clickoff_g":24,"chat_start_m":72,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-05-25","bruto":1381,"cashback":438,"liquido":943,"cliques_g":63,"cliques_m":262,"clickoff_g":21,"chat_start_m":23,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-01","bruto":2146,"cashback":668,"liquido":1478,"cliques_g":180,"cliques_m":434,"clickoff_g":61,"chat_start_m":29,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-08","bruto":1670,"cashback":367,"liquido":1303,"cliques_g":138,"cliques_m":271,"clickoff_g":79,"chat_start_m":18,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-15","bruto":458,"cashback":217,"liquido":242,"cliques_g":41,"cliques_m":94,"clickoff_g":12,"chat_start_m":7,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-22","bruto":1138,"cashback":620,"liquido":518,"cliques_g":119,"cliques_m":166,"clickoff_g":39,"chat_start_m":16,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-29","bruto":704,"cashback":220,"liquido":484,"cliques_g":90,"cliques_m":124,"clickoff_g":23,"chat_start_m":12,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0}],"ativa-telecom":[{"ws":"2026-06-08","bruto":0,"cashback":0,"liquido":0,"cliques_g":0,"cliques_m":0,"clickoff_g":0,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-15","bruto":0,"cashback":0,"liquido":0,"cliques_g":0,"cliques_m":0,"clickoff_g":0,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-22","bruto":841,"cashback":497,"liquido":343,"cliques_g":59,"cliques_m":78,"clickoff_g":34,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-29","bruto":711,"cashback":866,"liquido":-155,"cliques_g":83,"cliques_m":48,"clickoff_g":55,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0}],"ultranet-network":[{"ws":"2026-06-08","bruto":0,"cashback":0,"liquido":0,"cliques_g":0,"cliques_m":0,"clickoff_g":0,"chat_start_m":0,"leads_g":0,"vendas_g":0,"leads_m":0,"vendas_m":0},{"ws":"2026-06-15","bruto":1152,"cashback":31,"liquido":1121,"cliques_g":74,"cliques_m":207,"clickoff_g":25,"chat_start_m":12,"leads_g":2,"vendas_g":0,"leads_m":2,"vendas_m":0},{"ws":"2026-06-22","bruto":1191,"cashback":312,"liquido":878,"cliques_g":120,"cliques_m":157,"clickoff_g":22,"chat_start_m":26,"leads_g":3,"vendas_g":0,"leads_m":2,"vendas_m":0},{"ws":"2026-06-29","bruto":545,"cashback":166,"liquido":379,"cliques_g":70,"cliques_m":82,"clickoff_g":24,"chat_start_m":9,"leads_g":1,"vendas_g":0,"leads_m":0,"vendas_m":0}]};
+
+const CREDIT_TIMESERIES = {"direct internet":[{"dia":"2026-04-27","credito":3483,"total":10000},{"dia":"2026-05-04","credito":2808,"total":10700},{"dia":"2026-05-11","credito":1714,"total":11225},{"dia":"2026-05-18","credito":670,"total":11225},{"dia":"2026-05-25","credito":-513,"total":11225},{"dia":"2026-06-01","credito":3450,"total":21225},{"dia":"2026-06-08","credito":2802,"total":21225},{"dia":"2026-06-15","credito":4901,"total":26937},{"dia":"2026-06-22","credito":3994,"total":26937},{"dia":"2026-06-29","credito":5483,"total":31937}],"interplus internet":[{"dia":"2026-04-27","credito":3511,"total":20000},{"dia":"2026-05-04","credito":2513,"total":20000},{"dia":"2026-05-11","credito":1815,"total":20000},{"dia":"2026-05-18","credito":936,"total":20000},{"dia":"2026-05-25","credito":243,"total":20000},{"dia":"2026-06-01","credito":3597,"total":28000},{"dia":"2026-06-08","credito":2984,"total":28000},{"dia":"2026-06-29","credito":6984,"total":18000}],"loga-internet":[{"dia":"2026-04-27","credito":-6041,"total":38000},{"dia":"2026-05-04","credito":-2835,"total":48000},{"dia":"2026-05-11","credito":-2760,"total":52000},{"dia":"2026-05-18","credito":-4960,"total":52000},{"dia":"2026-05-25","credito":-7390,"total":52000},{"dia":"2026-06-01","credito":-8949,"total":52000},{"dia":"2026-06-08","credito":-705,"total":72000},{"dia":"2026-06-15","credito":-2428,"total":72000},{"dia":"2026-06-22","credito":-4456,"total":72000},{"dia":"2026-06-29","credito":-1302,"total":82000}],"the fiber internet":[{"dia":"2026-04-27","credito":1375,"total":10000},{"dia":"2026-05-04","credito":5245,"total":22201},{"dia":"2026-05-11","credito":5474,"total":26352},{"dia":"2026-05-18","credito":2943,"total":26352},{"dia":"2026-05-25","credito":-366,"total":26352},{"dia":"2026-06-01","credito":2651,"total":36352},{"dia":"2026-06-08","credito":431,"total":36352},{"dia":"2026-06-29","credito":4793,"total":46352}],"unifique":[{"dia":"2026-04-27","credito":5000,"total":5000},{"dia":"2026-05-04","credito":4266,"total":10000},{"dia":"2026-05-11","credito":3426,"total":10000},{"dia":"2026-05-18","credito":1965,"total":10000},{"dia":"2026-05-25","credito":83,"total":10000},{"dia":"2026-06-15","credito":3575,"total":16071},{"dia":"2026-06-22","credito":2812,"total":17856},{"dia":"2026-06-29","credito":2686,"total":17856}],"enove-fibra":[{"dia":"2026-05-11","credito":4566,"total":10000},{"dia":"2026-05-18","credito":4053,"total":10000},{"dia":"2026-05-25","credito":3091,"total":10000},{"dia":"2026-06-01","credito":1836,"total":10000},{"dia":"2026-06-08","credito":318,"total":10000},{"dia":"2026-06-15","credito":1706,"total":12086},{"dia":"2026-06-22","credito":1358,"total":13812},{"dia":"2026-06-29","credito":766,"total":13812}],"ativa-telecom":[{"dia":"2026-06-08","credito":5000,"total":5000},{"dia":"2026-06-15","credito":10000,"total":10000},{"dia":"2026-06-22","credito":9806,"total":20000},{"dia":"2026-06-29","credito":9736,"total":20000}],"ultranet-network":[{"dia":"2026-06-08","credito":5000,"total":5000},{"dia":"2026-06-15","credito":4408,"total":10000},{"dia":"2026-06-22","credito":3234,"total":10000},{"dia":"2026-06-29","credito":2732,"total":10000}]};
+
+// ─────────── ESTADO ───────────
+const LS_PERIOD  = 'mpa_period_v2';
+const LS_CANAL   = 'mpa_canal';
+const LS_PARTNER = 'mpa_partner';       // agora guarda lista separada por vírgula (multi-select)
+const LS_COMPARE = 'mpa_compare';
+const LS_CUSTOM_START = 'mpa_custom_start';
+const LS_CUSTOM_END   = 'mpa_custom_end';
+const storedPartners = (localStorage.getItem(LS_PARTNER) || '').split(',').map(s => s.trim()).filter(Boolean);
+let state = {
+  period:  localStorage.getItem(LS_PERIOD)  || '30d',  // valores: "7d", "30d", "90d", "2026-MM", "custom"
+  canal:   localStorage.getItem(LS_CANAL)   || '',
+  partners: storedPartners,     // [] = todos, ou lista de id_mp selecionados (multi-select)
+  customStart: localStorage.getItem(LS_CUSTOM_START) || '',
+  customEnd:   localStorage.getItem(LS_CUSTOM_END)   || '',
+  compare: localStorage.getItem(LS_COMPARE) === '1',
+  progGran: localStorage.getItem('mpa_prog_gran') || 'monthly',
+  sortKey: 'liquido',
+  sortDir: 'desc',
+  sortGoogle: { key: 'cliques', dir: 'desc' },
+  sortMeta:   { key: 'cliques', dir: 'desc' },
+};
+// compat: código legado que referenciava state.partner (singular) — mantém o 1o item selecionado
+Object.defineProperty(state, 'partner', {
+  get() { return this.partners.length === 1 ? this.partners[0] : (this.partners.length === 0 ? '' : this.partners[0]); }
+});
+
+// ─────────── Delta helpers ───────────
+function prevPeriodKey(pk) {
+  if (pk === '7d')  return '7d_prev';
+  if (pk === '30d') return '30d_prev';
+  if (pk === '90d') return '90d_prev';
+  const m = /^(\d{4})-(\d{2})$/.exec(pk);
+  if (m) {
+    let y = +m[1], mm = +m[2] - 1;
+    if (mm === 0) { mm = 12; y -= 1; }
+    return `${y}-${String(mm).padStart(2,'0')}`;
+  }
+  return null;
+}
+function snapshotPrev() {
+  const ppk = prevPeriodKey(state.period);
+  if (!ppk) return [];
+  // Para mensais, busca no SNAPSHOT atual; para cumulativos, busca no PREV
+  return [...SNAPSHOT, ...PREV_SNAPSHOT].filter(r => r.period_key === ppk);
+}
+function googleFunnelPrev() {
+  const ppk = prevPeriodKey(state.period);
+  if (!ppk) return [];
+  return [...FUNNEL_GOOGLE, ...PREV_FUNNEL_GOOGLE].filter(r => r.p_key === ppk);
+}
+function metaFunnelPrev() {
+  const ppk = prevPeriodKey(state.period);
+  if (!ppk) return [];
+  return [...FUNNEL_META, ...PREV_FUNNEL_META].filter(r => r.p_key === ppk);
+}
+function findPrevCosts(id_mp, canal) {
+  const r = snapshotPrev().find(s => s.id_mp === id_mp && s.canal === canal);
+  return r || null;
+}
+function findPrevGoogle(id_mp) {
+  return googleFunnelPrev().find(r => r.id_mp === id_mp) || null;
+}
+function findPrevMeta(id_mp) {
+  return metaFunnelPrev().find(r => r.id_mp === id_mp) || null;
+}
+// retorna span HTML do delta — semantic: 'up_good' (subiu=verde) ou 'down_good' (subiu=vermelho, ex. CAC) ou 'neutral'
+function deltaSpan(curr, prev, semantic) {
+  if (!state.compare) return '';
+  if (curr == null || prev == null || !isFinite(curr) || !isFinite(prev) || prev === 0) return '';
+  const d = (curr - prev) / Math.abs(prev);
+  if (Math.abs(d) < 0.005) return `<span class="cell-delta flat">· 0%</span>`;
+  const goodIfUp = semantic !== 'down_good';
+  const isUp = d > 0;
+  const cls = (isUp === goodIfUp) ? 'up' : 'down';
+  const arrow = isUp ? '▲' : '▼';
+  return `<span class="cell-delta ${cls}">${arrow} ${(d*100).toFixed(0)}%</span>`;
+}
+
+// ─────────── HELPERS ───────────
+function fmtBRL(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
+function fmtNum(v) { return (v || 0).toLocaleString('pt-BR'); }
+function fmtPct(v) { return (v == null || !isFinite(v)) ? '—' : (v * 100).toFixed(1) + '%'; }
+function safeDiv(a, b) { return (b && b > 0) ? a / b : null; }
+function isMonth(key) { return /^\d{4}-\d{2}$/.test(key); }
+
+// ─────────── Outlier detection (vs. mediana do grupo) ───────────
+const OUTLIER_LOW = 0.5;   // < 50% da mediana
+const OUTLIER_HIGH = 2.0;  // > 200% da mediana
+function median(arr) {
+  const f = arr.filter(v => v != null && isFinite(v));
+  if (f.length < 2) return null;
+  const s = f.slice().sort((a,b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid-1] + s[mid]) / 2;
+}
+function outlierClass(value, med, mode) {
+  if (med == null || med <= 0 || value == null || !isFinite(value)) return '';
+  const ratio = value / med;
+  if (mode === 'rate') {
+    if (ratio < OUTLIER_LOW) return 'cell-bad';
+    if (ratio > OUTLIER_HIGH) return 'cell-good';
+  } else if (mode === 'cost') {
+    if (ratio > OUTLIER_HIGH) return 'cell-bad';
+    if (ratio < OUTLIER_LOW) return 'cell-good';
+  }
+  return '';
+}
+
+function partnerMatch(id_mp) { return state.partners.length === 0 || state.partners.includes(id_mp); }
+
+function aggDailySnapshot(dStartStr, dEndStr) {
+  // DAILY_SNAPSHOT (desde 2026-07-02) é um array posicional compacto pra economizar espaço:
+  // [dia, partnerIdx, bruto_g, cashback_g, liquido_g, leads_g, vendas_g, bruto_m, cashback_m, liquido_m, leads_m, vendas_m]
+  // partnerIdx indexa DS_PARTNERS. Agrega por (id_mp, canal) no intervalo [dStartStr, dEndStr] (inclusive),
+  // retornando linhas no MESMO formato de SNAPSHOT+funnel combinados: {period_key, id_mp, canal, bruto, cashback, liquido, leads, vendas}
+  const m = new Map();
+  function add(id_mp, canal, bruto, cashback, liquido, leads, vendas) {
+    if (!bruto && !cashback && !liquido && !leads && !vendas) return;
+    const k = id_mp + '|' + canal;
+    if (!m.has(k)) m.set(k, { period_key: 'custom', id_mp, canal, bruto: 0, cashback: 0, liquido: 0, leads: 0, vendas: 0 });
+    const a = m.get(k);
+    a.bruto += bruto || 0; a.cashback += cashback || 0; a.liquido += liquido || 0;
+    a.leads += leads || 0; a.vendas += vendas || 0;
+  }
+  for (const r of DAILY_SNAPSHOT) {
+    const dia = r[0];
+    if (dia < dStartStr || dia > dEndStr) continue;
+    const id_mp = DS_PARTNERS[r[1]];
+    add(id_mp, 'google', r[2], r[3], r[4], r[5], r[6]);
+    add(id_mp, 'meta',   r[7], r[8], r[9], r[10], r[11]);
+  }
+  return Array.from(m.values());
+}
+function customWindowDays() {
+  if (!state.customStart || !state.customEnd) return 0;
+  const a = new Date(state.customStart), b = new Date(state.customEnd);
+  return Math.round((b - a) / 86400000) + 1;
+}
+function isCustomActive() {
+  return state.period === 'custom' && !!state.customStart && !!state.customEnd;
+}
+function rowsForPeriod() {
+  if (isCustomActive()) {
+    return aggDailySnapshot(state.customStart, state.customEnd);
+  }
+  return SNAPSHOT.filter(r => r.period_key === state.period).map(r => {
+    const funnel = r.canal === 'google'
+      ? FUNNEL_GOOGLE.find(f => f.p_key === state.period && f.id_mp === r.id_mp)
+      : FUNNEL_META.find(f => f.p_key === state.period && f.id_mp === r.id_mp);
+    return { ...r, leads: funnel ? funnel.leads : 0, vendas: funnel ? funnel.vendas : 0 };
+  });
+}
+function rowsForFilter() {
+  const base = rowsForPeriod();
+  return base.filter(r => (!state.canal || r.canal === state.canal) && partnerMatch(r.id_mp));
+}
+function googleFunnel() {
+  return FUNNEL_GOOGLE.filter(r => r.p_key === state.period && partnerMatch(r.id_mp)).map(r => {
+    const c = SNAPSHOT.find(s => s.period_key === state.period && s.id_mp === r.id_mp && s.canal === 'google');
+    return { ...r, bruto: c ? c.bruto : 0, cashback: c ? c.cashback : 0, liquido: c ? c.liquido : 0 };
+  });
+}
+function metaFunnel() {
+  return FUNNEL_META.filter(r => r.p_key === state.period && partnerMatch(r.id_mp)).map(r => {
+    const c = SNAPSHOT.find(s => s.period_key === state.period && s.id_mp === r.id_mp && s.canal === 'meta');
+    return { ...r, bruto: c ? c.bruto : 0, cashback: c ? c.cashback : 0, liquido: c ? c.liquido : 0 };
+  });
+}
+function timeForFilter() {
+  let inRange;
+  if (isMonth(state.period)) {
+    inRange = (dia) => dia.startsWith(state.period);
+  } else {
+    const days = parseInt(state.period.replace('d',''), 10);
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    inRange = (dia) => dia >= cutoffStr;
+  }
+  return TIMESERIES.filter(r => inRange(r.dia) && (!state.canal || r.canal === state.canal));
+}
+
+function aggregate(rows) {
+  const t = rows.reduce((a, r) => {
+    a.bruto    += r.bruto    || 0;
+    a.cashback += r.cashback || 0;
+    a.liquido  += r.liquido  || 0;
+    a.leads    += r.leads    || 0;
+    a.vendas   += r.vendas   || 0;
+    return a;
+  }, { bruto: 0, cashback: 0, liquido: 0, leads: 0, vendas: 0 });
+  t.cpl = safeDiv(t.liquido, t.leads);
+  t.cac = safeDiv(t.liquido, t.vendas);
+  t.rate = safeDiv(t.vendas, t.leads);
+  return t;
+}
+
+function aggByDate(rows) {
+  const m = new Map();
+  for (const r of rows) {
+    const k = r.dia;
+    if (!m.has(k)) m.set(k, { dia: k, investimento: 0, leads: 0, vendas: 0 });
+    const a = m.get(k); a.investimento += r.investimento; a.leads += r.leads; a.vendas += r.vendas;
+  }
+  return Array.from(m.values()).sort((a,b) => a.dia.localeCompare(b.dia));
+}
+
+// ─────────── RENDER ───────────
+let chartTime = null;
+
+function rowsForPeriodPrev() {
+  if (isCustomActive()) {
+    const days = customWindowDays();
+    if (days <= 0) return [];
+    const start = new Date(state.customStart);
+    const prevEnd = new Date(start); prevEnd.setDate(prevEnd.getDate() - 1);
+    const prevStart = new Date(prevEnd); prevStart.setDate(prevStart.getDate() - (days - 1));
+    const iso = (d) => d.toISOString().slice(0, 10);
+    return aggDailySnapshot(iso(prevStart), iso(prevEnd))
+      .filter(r => (!state.canal || r.canal === state.canal) && partnerMatch(r.id_mp));
+  }
+  const ppk = prevPeriodKey(state.period);
+  if (!ppk) return [];
+  return [...SNAPSHOT, ...PREV_SNAPSHOT].filter(r => r.period_key === ppk).map(r => {
+    const fSrc = r.canal === 'google'
+      ? [...FUNNEL_GOOGLE, ...PREV_FUNNEL_GOOGLE].find(f => (f.p_key === ppk) && f.id_mp === r.id_mp)
+      : [...FUNNEL_META, ...PREV_FUNNEL_META].find(f => (f.p_key === ppk) && f.id_mp === r.id_mp);
+    return { ...r, leads: fSrc ? fSrc.leads : 0, vendas: fSrc ? fSrc.vendas : 0 };
+  }).filter(r => (!state.canal || r.canal === state.canal) && partnerMatch(r.id_mp));
+}
+
+function setKpiHtml(id, mainHtml, deltaHtml) {
+  const el = document.getElementById(id);
+  el.innerHTML = mainHtml + (deltaHtml || '');
+}
+
+function renderKPIs() {
+  const totals = aggregate(rowsForFilter());
+  const prev = aggregate(rowsForPeriodPrev());
+  setKpiHtml('kpi-invest', fmtBRL(totals.liquido), deltaSpan(totals.liquido, prev.liquido, 'up_good'));
+  setKpiHtml('kpi-leads',  fmtNum(totals.leads),   deltaSpan(totals.leads,   prev.leads,   'up_good'));
+  setKpiHtml('kpi-vendas', fmtNum(totals.vendas),  deltaSpan(totals.vendas,  prev.vendas,  'up_good'));
+  setKpiHtml('kpi-cpl',    totals.cpl == null ? '—' : fmtBRL(totals.cpl), deltaSpan(totals.cpl, prev.cpl, 'down_good'));
+  setKpiHtml('kpi-cac',    totals.cac == null ? '—' : fmtBRL(totals.cac), deltaSpan(totals.cac, prev.cac, 'down_good'));
+  setKpiHtml('kpi-rate',   fmtPct(totals.rate),    deltaSpan(totals.rate,    prev.rate,    'up_good'));
+  document.getElementById('kpi-invest-sub').textContent = `Bruto ${fmtBRL(totals.bruto)} · Cashback ${fmtBRL(totals.cashback)}`;
+  if (!state.canal) {
+    const base = rowsForPeriod();
+    const g = aggregate(base.filter(r => r.canal === 'google'));
+    const m = aggregate(base.filter(r => r.canal === 'meta'));
+    document.getElementById('kpi-leads-sub').textContent  = `G ${fmtNum(g.leads)} · M ${fmtNum(m.leads)}`;
+    document.getElementById('kpi-vendas-sub').textContent = `G ${fmtNum(g.vendas)} · M ${fmtNum(m.vendas)}`;
+  } else {
+    document.getElementById('kpi-leads-sub').textContent  = 'canal ' + state.canal;
+    document.getElementById('kpi-vendas-sub').textContent = ' ';
+  }
+}
+
+const PARTNER_COLORS = {
+  "loga-internet":       "#2563eb",
+  "the fiber internet":  "#16a34a",
+  "direct internet":     "#f59e0b",
+  "enove-fibra":         "#7c3aed",
+  "interplus internet":  "#dc2626",
+  "unifique":            "#0891b2",
+  "ultranet-network":    "#db2777",
+  "ativa-telecom":       "#64748b",
+};
+function renderChartTime() {
+  const ctx = document.getElementById('chart-time');
+  // União de todos os dias presentes
+  const allDays = new Set();
+  Object.values(CREDIT_TIMESERIES).forEach(arr => arr.forEach(r => allDays.add(r.dia)));
+  const labels = Array.from(allDays).sort();
+  // Aplicar filtro de partner se setado
+  const partners = Object.keys(CREDIT_TIMESERIES).filter(p => partnerMatch(p));
+  const datasets = partners.map(p => {
+    const series = CREDIT_TIMESERIES[p];
+    const byDay = new Map(series.map(r => [r.dia, r.credito]));
+    return {
+      label: p,
+      data: labels.map(d => byDay.has(d) ? byDay.get(d) : null),
+      borderColor: PARTNER_COLORS[p] || '#64748b',
+      backgroundColor: PARTNER_COLORS[p] || '#64748b',
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      tension: 0.2,
+      spanGaps: true,
+    };
+  });
+  if (chartTime) chartTime.destroy();
+  chartTime = new Chart(ctx, {
+    type: 'line',
+    data: { labels: labels.map(d => d.slice(5)), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      scales: {
+        y: { beginAtZero: false, title: { display: true, text: 'Crédito remanescente (R$)' }, grid: { color: '#f4f4f5' }, ticks: { callback: (v) => fmtBRL(v) } },
+        x: { ticks: { autoSkip: true, maxTicksLimit: 14 } }
+      },
+      plugins: {
+        legend: { position: 'top', align: 'end', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } },
+        tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + (c.parsed.y == null ? '—' : fmtBRL(c.parsed.y)) } }
+      }
+    }
+  });
+}
+
+function funnelCell(value, prevValue, outlierCls, prevAbsValue) {
+  const conv = prevValue ? value / prevValue : null;
+  const cls = outlierCls ? ' ' + outlierCls : '';
+  return `<td class="num${cls}"><span class="cell-volume">${fmtNum(value)}</span>${prevValue ? `<span class="cell-conv">${fmtPct(conv)}</span>` : ''}${deltaSpan(value, prevAbsValue, 'up_good')}</td>`;
+}
+
+function renderFunnelGoogle() {
+  if (state.period === 'custom') {
+    document.getElementById('funnel-google-table').innerHTML = '<div class="note">Funil detalhado (sessões/clickoff) não disponível para período customizado — use 7d/30d/90d/mês.</div>';
+    return;
+  }
+  const sortRef = state.sortGoogle;
+  const rows = googleFunnel().slice().sort((a,b) => {
+    const av = a[sortRef.key]; const bv = b[sortRef.key];
+    if (typeof av === 'string') return sortRef.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortRef.dir === 'asc' ? (av - bv) : (bv - av);
+  });
+  if (rows.length === 0) { document.getElementById('funnel-google-table').innerHTML = '<div class="note">Sem dados pra esse período.</div>'; return; }
+  // Medianas pra outlier (apenas partners com cliques ≥ 30 contam)
+  const peers = rows.filter(r => r.cliques >= 30);
+  const medSessoesCliques   = median(peers.filter(p => p.cliques > 0).map(p => p.sessoes / p.cliques));
+  const medClickoffSessoes  = median(peers.filter(p => p.sessoes > 0).map(p => p.clickoff / p.sessoes));
+  const medRedirectClickoff = median(peers.filter(p => p.clickoff > 0).map(p => p.redirect / p.clickoff));
+  const medLeadsRedirect    = median(peers.filter(p => p.redirect > 0).map(p => p.leads / p.redirect));
+  const medVendasLeads      = median(peers.filter(p => p.leads >= 3).map(p => p.vendas / p.leads));
+  const medConvFinal        = median(peers.filter(p => p.cliques >= 30).map(p => p.vendas / p.cliques));
+  const medCac              = median(peers.filter(p => p.vendas > 0 && p.liquido > 0).map(p => p.liquido / p.vendas));
+  const medCpl              = median(peers.filter(p => p.leads >= 3 && p.liquido > 0).map(p => p.liquido / p.leads));
+  const cols = [
+    { key: 'id_mp', label: 'Partner', type: 'text' },
+    { key: 'bruto', label: 'Bruto' }, { key: 'cashback', label: 'Cashback' }, { key: 'liquido', label: 'Líquido' },
+    { key: 'cpc', label: 'CPC', title: 'CPC = investimento bruto / cliques' },
+    { key: 'cliques', label: 'Cliques' },
+    { key: 'sessoes', label: 'Sessões' },
+    { key: 'clickoff', label: 'Clickoff' },
+    { key: 'redirect', label: 'Redirect' },
+    { key: 'leads', label: 'Leads', title: 'Leads produtivos: source em google/whatsapp e lead_accepted=true' },
+    { key: 'vendas', label: 'Vendas' },
+    { key: 'cpl', label: 'CPL líq.' },
+    { key: 'cac', label: 'CAC líq.' },
+    { key: 'conv_final', label: 'Cliques→Venda' },
+  ];
+  let html = '<table><thead><tr>';
+  for (const c of cols) {
+    const cls = (sortRef.key === c.key ? (sortRef.dir === 'asc' ? 'sort-asc' : 'sort-desc') : '') + (c.type === 'text' ? '' : ' num-h');
+    const titleAttr = c.title ? ` title="${c.title}"` : '';
+    html += `<th class="${cls}" data-key="${c.key}"${titleAttr}>${c.label}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  for (const r of rows) {
+    const cpl = safeDiv(r.liquido, r.leads);
+    const cac = safeDiv(r.liquido, r.vendas);
+    const cpc = safeDiv(r.bruto, r.cliques);
+    const convFinal = safeDiv(r.vendas, r.cliques);
+    const eligible = r.cliques >= 30;
+    const clsSessoes        = eligible && r.cliques > 0  ? outlierClass(r.sessoes / r.cliques,    medSessoesCliques,   'rate') : '';
+    const clsClickoff       = eligible && r.sessoes > 0  ? outlierClass(r.clickoff / r.sessoes,   medClickoffSessoes,  'rate') : '';
+    const clsRedirect       = eligible && r.clickoff > 0 ? outlierClass(r.redirect / r.clickoff,  medRedirectClickoff, 'rate') : '';
+    const clsLeadsRedirect  = eligible && r.redirect > 0 ? outlierClass(r.leads / r.redirect,     medLeadsRedirect,    'rate') : '';
+    const clsVendasLeads    = eligible && r.leads >= 3   ? outlierClass(r.vendas / r.leads,       medVendasLeads,      'rate') : '';
+    const clsConvFinal      = eligible                   ? outlierClass(convFinal,                medConvFinal,        'rate') : '';
+    const clsCac            = eligible && cac != null    ? outlierClass(cac,                      medCac,              'cost') : '';
+    const clsCpl            = eligible && cpl != null && r.leads >= 3 ? outlierClass(cpl,         medCpl,              'cost') : '';
+    html += '<tr>'
+      + `<td class="partner-cell">${r.id_mp}</td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.bruto)}</span></td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.cashback)}</span></td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span></td>`
+      + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL(cpc)}</span></td>`
+      + (() => { const pg = findPrevGoogle(r.id_mp); return ''
+          + funnelCell(r.cliques, null, '', pg?.cliques)
+          + funnelCell(r.sessoes, r.cliques, clsSessoes, pg?.sessoes)
+          + funnelCell(r.clickoff, r.sessoes, clsClickoff, pg?.clickoff)
+          + funnelCell(r.redirect, r.clickoff, clsRedirect, pg?.redirect)
+          + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pg?.leads)
+          + funnelCell(r.vendas, r.leads, clsVendasLeads, pg?.vendas);
+        })()
+      + (() => {
+          const pg = findPrevGoogle(r.id_mp), pc = findPrevCosts(r.id_mp, 'google');
+          const pCpl = (pg && pc) ? safeDiv(pc.liquido, pg.leads) : null;
+          const pCac = (pg && pc) ? safeDiv(pc.liquido, pg.vendas) : null;
+          const pConv = pg ? safeDiv(pg.vendas, pg.cliques) : null;
+          return `<td class="num ${clsCpl}"><span class="cell-volume">${cpl == null ? '—' : fmtBRL(cpl)}</span>${deltaSpan(cpl, pCpl, 'down_good')}</td>`
+            + `<td class="num ${clsCac}"><span class="cell-volume">${cac == null ? '—' : fmtBRL(cac)}</span>${deltaSpan(cac, pCac, 'down_good')}</td>`
+            + `<td class="num ${clsConvFinal}"><span class="cell-volume">${fmtPct(convFinal)}</span>${deltaSpan(convFinal, pConv, 'up_good')}</td>`;
+        })()
+      + '</tr>';
+  }
+  const tot = rows.reduce((a, r) => ({
+    bruto: a.bruto + (r.bruto||0), cashback: a.cashback + (r.cashback||0), liquido: a.liquido + (r.liquido||0),
+    cliques: a.cliques + r.cliques, sessoes: a.sessoes + r.sessoes, zip_search: a.zip_search + r.zip_search,
+    clickoff: a.clickoff + r.clickoff, redirect: a.redirect + r.redirect, leads: a.leads + r.leads, vendas: a.vendas + r.vendas,
+  }), {bruto:0,cashback:0,liquido:0,cliques:0,sessoes:0,zip_search:0,clickoff:0,redirect:0,leads:0,vendas:0});
+  const totCpl = safeDiv(tot.liquido, tot.leads);
+  const totCac = safeDiv(tot.liquido, tot.vendas);
+  const totCpc = safeDiv(tot.bruto, tot.cliques);
+  html += '<tr style="background:#f9fafb;font-weight:500;">'
+    + `<td class="partner-cell">TOTAL</td>`
+    + `<td class="num"><span class="cell-volume">${fmtBRL(tot.bruto)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${fmtBRL(tot.cashback)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${fmtBRL(tot.liquido)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${totCpc == null ? '—' : fmtBRL(totCpc)}</span></td>`
+    + funnelCell(tot.cliques, null)
+    + funnelCell(tot.sessoes, tot.cliques)
+    + funnelCell(tot.clickoff, tot.sessoes)
+    + funnelCell(tot.redirect, tot.clickoff)
+    + funnelCell(tot.leads, tot.redirect)
+    + funnelCell(tot.vendas, tot.leads)
+    + `<td class="num"><span class="cell-volume">${totCpl == null ? '—' : fmtBRL(totCpl)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${totCac == null ? '—' : fmtBRL(totCac)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${fmtPct(safeDiv(tot.vendas, tot.cliques))}</span></td>`
+    + '</tr>';
+  html += '</tbody></table>';
+  document.getElementById('funnel-google-table').innerHTML = html;
+  document.querySelectorAll('#funnel-google-table th').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.key;
+      if (k === 'conv_final' || k === 'cpl' || k === 'cac' || k === 'cpc') return;
+      if (state.sortGoogle.key === k) state.sortGoogle.dir = state.sortGoogle.dir === 'asc' ? 'desc' : 'asc';
+      else { state.sortGoogle.key = k; state.sortGoogle.dir = (k === 'id_mp') ? 'asc' : 'desc'; }
+      renderFunnelGoogle();
+    });
+  });
+}
+
+function renderFunnelMeta() {
+  if (state.period === 'custom') {
+    document.getElementById('funnel-meta-table').innerHTML = '<div class="note">Funil detalhado (sessões/clickoff) não disponível para período customizado — use 7d/30d/90d/mês.</div>';
+    return;
+  }
+  const sortRef = state.sortMeta;
+  const rows = metaFunnel().slice().sort((a,b) => {
+    const av = a[sortRef.key]; const bv = b[sortRef.key];
+    if (typeof av === 'string') return sortRef.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortRef.dir === 'asc' ? (av - bv) : (bv - av);
+  });
+  if (rows.length === 0) { document.getElementById('funnel-meta-table').innerHTML = '<div class="note">Sem dados pra esse período.</div>'; return; }
+  // Medianas pra outlier (apenas partners com cliques ≥ 100 contam — meta tem mais volume bruto)
+  const peers = rows.filter(r => r.cliques >= 100);
+  const medChatCliques    = median(peers.filter(p => p.cliques > 0).map(p => p.chat_start / p.cliques));
+  const medZipChat        = median(peers.filter(p => p.chat_start > 0).map(p => p.zip_search / p.chat_start));
+  const medRedirectZip    = median(peers.filter(p => p.zip_search > 0).map(p => p.redirect / p.zip_search));
+  const medLeadsRedirect  = median(peers.filter(p => p.redirect > 0).map(p => p.leads / p.redirect));
+  const medVendasLeads    = median(peers.filter(p => p.leads >= 3).map(p => p.vendas / p.leads));
+  const medConvFinal      = median(peers.filter(p => p.cliques >= 100).map(p => p.vendas / p.cliques));
+  const medCac            = median(peers.filter(p => p.vendas > 0 && p.liquido > 0).map(p => p.liquido / p.vendas));
+  const medCpl            = median(peers.filter(p => p.leads >= 3 && p.liquido > 0).map(p => p.liquido / p.leads));
+  const cols = [
+    { key: 'id_mp', label: 'Partner', type: 'text' },
+    { key: 'bruto', label: 'Bruto' }, { key: 'cashback', label: 'Cashback' }, { key: 'liquido', label: 'Líquido' },
+    { key: 'cpc', label: 'CPC', title: 'CPC = investimento bruto / cliques' },
+    { key: 'cliques', label: 'Cliques' },
+    { key: 'chat_start', label: 'Chat start' },
+    { key: 'zip_search', label: 'Zip search' },
+    { key: 'redirect', label: 'Redirect' },
+    { key: 'leads', label: 'Leads', title: 'Leads produtivos: source em google/whatsapp e lead_accepted=true' },
+    { key: 'vendas', label: 'Vendas' },
+    { key: 'cpl', label: 'CPL líq.' },
+    { key: 'cac', label: 'CAC líq.' },
+    { key: 'conv_final', label: 'Cliques→Venda' },
+  ];
+  let html = '<table><thead><tr>';
+  for (const c of cols) {
+    const cls = (sortRef.key === c.key ? (sortRef.dir === 'asc' ? 'sort-asc' : 'sort-desc') : '') + (c.type === 'text' ? '' : ' num-h');
+    const titleAttr = c.title ? ` title="${c.title}"` : '';
+    html += `<th class="${cls}" data-key="${c.key}"${titleAttr}>${c.label}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  for (const r of rows) {
+    const cpl = safeDiv(r.liquido, r.leads);
+    const cac = safeDiv(r.liquido, r.vendas);
+    const cpc = safeDiv(r.bruto, r.cliques);
+    const convFinal = safeDiv(r.vendas, r.cliques);
+    const eligible = r.cliques >= 100;
+    const clsChat           = eligible && r.cliques > 0    ? outlierClass(r.chat_start / r.cliques,   medChatCliques,   'rate') : '';
+    const clsZip            = eligible && r.chat_start > 0 ? outlierClass(r.zip_search / r.chat_start, medZipChat,       'rate') : '';
+    const clsRedirect       = eligible && r.zip_search > 0 ? outlierClass(r.redirect / r.zip_search,   medRedirectZip,   'rate') : '';
+    const clsLeadsRedirect  = eligible && r.redirect > 0   ? outlierClass(r.leads / r.redirect,        medLeadsRedirect, 'rate') : '';
+    const clsVendasLeads    = eligible && r.leads >= 3     ? outlierClass(r.vendas / r.leads,          medVendasLeads,   'rate') : '';
+    const clsConvFinal      = eligible                     ? outlierClass(convFinal,                   medConvFinal,     'rate') : '';
+    const clsCac            = eligible && cac != null      ? outlierClass(cac,                         medCac,           'cost') : '';
+    const clsCpl            = eligible && cpl != null && r.leads >= 3 ? outlierClass(cpl,              medCpl,           'cost') : '';
+    html += '<tr>'
+      + `<td class="partner-cell">${r.id_mp}</td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.bruto)}</span></td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.cashback)}</span></td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span></td>`
+      + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL(cpc)}</span></td>`
+      + (() => { const pm = findPrevMeta(r.id_mp); return ''
+          + funnelCell(r.cliques, null, '', pm?.cliques)
+          + funnelCell(r.chat_start, r.cliques, clsChat, pm?.chat_start)
+          + funnelCell(r.zip_search, r.chat_start, clsZip, pm?.zip_search)
+          + funnelCell(r.redirect, r.zip_search, clsRedirect, pm?.redirect)
+          + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pm?.leads)
+          + funnelCell(r.vendas, r.leads, clsVendasLeads, pm?.vendas);
+        })()
+      + (() => {
+          const pm = findPrevMeta(r.id_mp), pc = findPrevCosts(r.id_mp, 'meta');
+          const pCpl = (pm && pc) ? safeDiv(pc.liquido, pm.leads) : null;
+          const pCac = (pm && pc) ? safeDiv(pc.liquido, pm.vendas) : null;
+          const pConv = pm ? safeDiv(pm.vendas, pm.cliques) : null;
+          return `<td class="num ${clsCpl}"><span class="cell-volume">${cpl == null ? '—' : fmtBRL(cpl)}</span>${deltaSpan(cpl, pCpl, 'down_good')}</td>`
+            + `<td class="num ${clsCac}"><span class="cell-volume">${cac == null ? '—' : fmtBRL(cac)}</span>${deltaSpan(cac, pCac, 'down_good')}</td>`
+            + `<td class="num ${clsConvFinal}"><span class="cell-volume">${fmtPct(convFinal)}</span>${deltaSpan(convFinal, pConv, 'up_good')}</td>`;
+        })()
+      + '</tr>';
+  }
+  const tot = rows.reduce((a, r) => ({
+    bruto: a.bruto + (r.bruto||0), cashback: a.cashback + (r.cashback||0), liquido: a.liquido + (r.liquido||0),
+    cliques: a.cliques + (r.cliques||0),
+    chat_start: a.chat_start + r.chat_start, zip_search: a.zip_search + r.zip_search, get_plans: a.get_plans + r.get_plans,
+    redirect: a.redirect + r.redirect, leads: a.leads + r.leads, vendas: a.vendas + r.vendas,
+  }), {bruto:0,cashback:0,liquido:0,cliques:0,chat_start:0,zip_search:0,get_plans:0,redirect:0,leads:0,vendas:0});
+  const totCpl = safeDiv(tot.liquido, tot.leads);
+  const totCac = safeDiv(tot.liquido, tot.vendas);
+  const totCpc = safeDiv(tot.bruto, tot.cliques);
+  html += '<tr style="background:#f9fafb;font-weight:500;">'
+    + `<td class="partner-cell">TOTAL</td>`
+    + `<td class="num"><span class="cell-volume">${fmtBRL(tot.bruto)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${fmtBRL(tot.cashback)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${fmtBRL(tot.liquido)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${totCpc == null ? '—' : fmtBRL(totCpc)}</span></td>`
+    + funnelCell(tot.cliques, null)
+    + funnelCell(tot.chat_start, tot.cliques)
+    + funnelCell(tot.zip_search, tot.chat_start)
+    + funnelCell(tot.redirect, tot.zip_search)
+    + funnelCell(tot.leads, tot.redirect)
+    + funnelCell(tot.vendas, tot.leads)
+    + `<td class="num"><span class="cell-volume">${totCpl == null ? '—' : fmtBRL(totCpl)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${totCac == null ? '—' : fmtBRL(totCac)}</span></td>`
+    + `<td class="num"><span class="cell-volume">${fmtPct(safeDiv(tot.vendas, tot.cliques))}</span></td>`
+    + '</tr>';
+  html += '</tbody></table>';
+  document.getElementById('funnel-meta-table').innerHTML = html;
+  document.querySelectorAll('#funnel-meta-table th').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.key;
+      if (k === 'conv_final' || k === 'cpl' || k === 'cac' || k === 'cpc') return;
+      if (state.sortMeta.key === k) state.sortMeta.dir = state.sortMeta.dir === 'asc' ? 'desc' : 'asc';
+      else { state.sortMeta.key = k; state.sortMeta.dir = (k === 'id_mp') ? 'asc' : 'desc'; }
+      renderFunnelMeta();
+    });
+  });
+}
+
+function renderDetailTable() {
+  // Agrega por partner (soma os canais que passam pelo filtro)
+  const byPartner = new Map();
+  for (const r of rowsForFilter()) {
+    if (!byPartner.has(r.id_mp)) byPartner.set(r.id_mp, { id_mp: r.id_mp, bruto: 0, cashback: 0, liquido: 0, leads: 0, vendas: 0 });
+    const a = byPartner.get(r.id_mp);
+    a.bruto    += r.bruto    || 0;
+    a.cashback += r.cashback || 0;
+    a.liquido  += r.liquido  || 0;
+    a.leads    += r.leads    || 0;
+    a.vendas   += r.vendas   || 0;
+  }
+  const rows = Array.from(byPartner.values()).map(r => ({
+    ...r,
+    cpl: safeDiv(r.liquido, r.leads),
+    cac: safeDiv(r.liquido, r.vendas),
+    rate: safeDiv(r.vendas, r.leads),
+  })).sort((a, b) => {
+    const k = state.sortKey;
+    const av = typeof a[k] === 'string' ? a[k] : Number(a[k] || 0);
+    const bv = typeof b[k] === 'string' ? b[k] : Number(b[k] || 0);
+    if (av < bv) return state.sortDir === 'asc' ? -1 : 1;
+    if (av > bv) return state.sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  if (rows.length === 0) { document.getElementById('table-container').innerHTML = '<div class="note">Nenhum dado para esse filtro.</div>'; return; }
+  // Medianas pra outlier (partners com leads ≥ 3 entram)
+  const peers = rows.filter(r => r.leads >= 3);
+  const medRate = median(peers.map(p => p.vendas / p.leads));
+  const medCac  = median(peers.filter(p => p.vendas > 0 && p.liquido > 0).map(p => p.liquido / p.vendas));
+  const medCpl  = median(peers.filter(p => p.liquido > 0).map(p => p.liquido / p.leads));
+  const cols = [
+    { key: 'id_mp', label: 'Partner' },
+    { key: 'bruto', label: 'Bruto' }, { key: 'cashback', label: 'Cashback' }, { key: 'liquido', label: 'Líquido' },
+    { key: 'leads', label: 'Leads', title: 'Leads produtivos: source em google/whatsapp e lead_accepted=true' }, { key: 'vendas', label: 'Vendas' },
+    { key: 'cpl', label: 'CPL líq.' }, { key: 'cac', label: 'CAC líq.' }, { key: 'rate', label: 'Lead→Venda' },
+  ];
+  let html = '<table><thead><tr>';
+  for (const c of cols) {
+    const cls = state.sortKey === c.key ? (state.sortDir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
+    const titleAttr = c.title ? ` title="${c.title}"` : '';
+    html += `<th class="${cls}" data-key="${c.key}"${titleAttr}>${c.label}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+  for (const r of rows) {
+    const warn = r.bruto > 0 && r.leads === 0;
+    const eligible = r.leads >= 3;
+    const clsRate = eligible ? outlierClass(r.rate, medRate, 'rate') : '';
+    const clsCac  = eligible && r.cac != null ? outlierClass(r.cac, medCac, 'cost') : '';
+    const clsCpl  = eligible && r.cpl != null ? outlierClass(r.cpl, medCpl, 'cost') : '';
+    // Período anterior consolidado por partner (somando canais ativos)
+    let pL = 0, pV = 0, pLiq = 0;
+    const pCG = findPrevCosts(r.id_mp, 'google');
+    const pCM = findPrevCosts(r.id_mp, 'meta');
+    const pFG = findPrevGoogle(r.id_mp);
+    const pFM = findPrevMeta(r.id_mp);
+    const respCanal = (canal) => !state.canal || state.canal === canal;
+    if (respCanal('google')) { if (pCG) pLiq += pCG.liquido || 0; if (pFG) { pL += pFG.leads || 0; pV += pFG.vendas || 0; } }
+    if (respCanal('meta'))   { if (pCM) pLiq += pCM.liquido || 0; if (pFM) { pL += pFM.leads || 0; pV += pFM.vendas || 0; } }
+    const pCpl = safeDiv(pLiq, pL), pCac = safeDiv(pLiq, pV), pRate = safeDiv(pV, pL);
+    html += `<tr class="${warn ? 'warn-row' : ''}">`
+      + `<td class="partner-cell">${r.id_mp || '—'}</td>`
+      + `<td class="num">${fmtBRL(r.bruto)}</td>`
+      + `<td class="num">${fmtBRL(r.cashback)}</td>`
+      + `<td class="num">${fmtBRL(r.liquido)}</td>`
+      + `<td class="num">${fmtNum(r.leads)}${deltaSpan(r.leads, pL, 'up_good')}</td>`
+      + `<td class="num">${fmtNum(r.vendas)}${deltaSpan(r.vendas, pV, 'up_good')}</td>`
+      + `<td class="num ${clsCpl}">${r.cpl == null ? '—' : fmtBRL(r.cpl)}${deltaSpan(r.cpl, pCpl, 'down_good')}</td>`
+      + `<td class="num ${clsCac}">${r.cac == null ? '—' : fmtBRL(r.cac)}${deltaSpan(r.cac, pCac, 'down_good')}</td>`
+      + `<td class="num ${clsRate}">${fmtPct(r.rate)}${deltaSpan(r.rate, pRate, 'up_good')}</td>`
+      + '</tr>';
+  }
+  // total
+  const tot = rows.reduce((a, r) => ({
+    bruto: a.bruto + r.bruto, cashback: a.cashback + r.cashback, liquido: a.liquido + r.liquido,
+    leads: a.leads + r.leads, vendas: a.vendas + r.vendas,
+  }), {bruto:0,cashback:0,liquido:0,leads:0,vendas:0});
+  const totCpl = safeDiv(tot.liquido, tot.leads);
+  const totCac = safeDiv(tot.liquido, tot.vendas);
+  const totRate = safeDiv(tot.vendas, tot.leads);
+  html += '<tr style="background:#f9fafb;font-weight:500;">'
+    + `<td class="partner-cell">TOTAL</td>`
+    + `<td class="num">${fmtBRL(tot.bruto)}</td>`
+    + `<td class="num">${fmtBRL(tot.cashback)}</td>`
+    + `<td class="num">${fmtBRL(tot.liquido)}</td>`
+    + `<td class="num">${fmtNum(tot.leads)}</td>`
+    + `<td class="num">${fmtNum(tot.vendas)}</td>`
+    + `<td class="num">${totCpl == null ? '—' : fmtBRL(totCpl)}</td>`
+    + `<td class="num">${totCac == null ? '—' : fmtBRL(totCac)}</td>`
+    + `<td class="num">${fmtPct(totRate)}</td>`
+    + '</tr>';
+  html += '</tbody></table>';
+  document.getElementById('table-container').innerHTML = html;
+  document.querySelectorAll('#table-container th').forEach(th => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.key;
+      if (state.sortKey === k) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+      else { state.sortKey = k; state.sortDir = (k === 'id_mp') ? 'asc' : 'desc'; }
+      renderDetailTable();
+    });
+  });
+}
+
+function applyCanalVisibility() {
+  const showGoogle = !state.canal || state.canal === 'google';
+  const showMeta   = !state.canal || state.canal === 'meta';
+  document.getElementById('funnel-google-section').style.display = showGoogle ? '' : 'none';
+  document.getElementById('funnel-meta-section').style.display   = showMeta   ? '' : 'none';
+}
+
+function renderCoverage() {
+  // Monta linhas (partner × canal) combinando custos (SNAPSHOT ou DAILY_SNAPSHOT agregado, se período customizado)
+  // + FUNNEL_GOOGLE/META (volume base e leads). Períodos padrão (7d/30d/90d/mês) têm funil detalhado disponível;
+  // período customizado só tem custos+leads/vendas agregados por dia (DAILY_SNAPSHOT não guarda clickoff/chat_start),
+  // então Vol. base e % Assertividade ficam marcados como indisponíveis nesse caso (ver nota abaixo da tabela).
+  const custom = isCustomActive();
+  const partnerFlt = (id) => partnerMatch(id);
+  const gMap = new Map(), mMap = new Map();
+  let costRows;
+  if (custom) {
+    costRows = aggDailySnapshot(state.customStart, state.customEnd);
+  } else {
+    costRows = SNAPSHOT.filter(s => s.period_key === state.period);
+    const periodFlt = (r) => r.p_key === state.period;
+    FUNNEL_GOOGLE.filter(periodFlt).forEach(r => gMap.set(r.id_mp, r));
+    FUNNEL_META.filter(periodFlt).forEach(r => mMap.set(r.id_mp, r));
+  }
+  const cMap = new Map();
+  costRows.forEach(s => cMap.set(s.id_mp + '|' + s.canal, s));
+  const rows = [];
+  for (const [key, s] of cMap) {
+    if (!partnerFlt(s.id_mp)) continue;
+    if (state.canal && state.canal !== s.canal) continue;
+    const isGoogle = s.canal === 'google';
+    const funnel = isGoogle ? gMap.get(s.id_mp) : mMap.get(s.id_mp);
+    const baseVol = funnel ? (isGoogle ? funnel.clickoff : funnel.chat_start) : (custom ? null : 0);
+    const leads = custom ? (s.leads || 0) : (funnel ? funnel.leads : 0);
+    rows.push({
+      id_mp: s.id_mp,
+      canal: s.canal,
+      bruto: s.bruto, cashback: s.cashback, liquido: s.liquido,
+      pct_cashback: safeDiv(s.cashback, s.bruto),
+      vol_base: baseVol,
+      base_label: isGoogle ? 'Clickoff' : 'Chat start',
+      leads: leads,
+      pct_assertividade: (baseVol != null) ? safeDiv(leads, baseVol) : null,
+    });
+  }
+  // Mediana: separar por canal pq Clickoff e Chat são bases diferentes
+  const gRows = rows.filter(r => r.canal === 'google' && r.bruto >= 100);
+  const mRows = rows.filter(r => r.canal === 'meta'   && r.bruto >= 100);
+  const medCashbackG = median(gRows.map(r => r.pct_cashback));
+  const medCashbackM = median(mRows.map(r => r.pct_cashback));
+  const medAssertG   = median(gRows.filter(r => r.vol_base >= 20).map(r => r.pct_assertividade));
+  const medAssertM   = median(mRows.filter(r => r.vol_base >= 20).map(r => r.pct_assertividade));
+  rows.sort((a,b) => (b.bruto || 0) - (a.bruto || 0));
+  if (rows.length === 0) { document.getElementById('coverage-table').innerHTML = '<div class="note">Nenhum dado para esse filtro.</div>'; return; }
+  const cols = ['Partner','Canal','Bruto','Cashback','% Cashback','Vol. base','Leads','% Assertividade'];
+  let html = '<table><thead><tr>' + cols.map(c => `<th class="${c==='Partner'||c==='Canal'?'':'num-h'}">${c}</th>`).join('') + '</tr></thead><tbody>';
+  for (const r of rows) {
+    const med1 = r.canal === 'google' ? medCashbackG : medCashbackM;
+    const med2 = r.canal === 'google' ? medAssertG   : medAssertM;
+    const eligibleCash = r.bruto >= 100;
+    const eligibleAsr  = r.vol_base != null && r.bruto >= 100 && r.vol_base >= 20;
+    const clsCash = eligibleCash ? outlierClass(r.pct_cashback, med1, 'cost') : '';
+    const clsAsr  = eligibleAsr  ? outlierClass(r.pct_assertividade, med2, 'rate') : '';
+    // Período anterior pra essas mesmas métricas
+    const prevCosts = findPrevCosts(r.id_mp, r.canal);
+    const prevFunnel = r.canal === 'google' ? findPrevGoogle(r.id_mp) : findPrevMeta(r.id_mp);
+    const prevPctCashback = prevCosts ? safeDiv(prevCosts.cashback, prevCosts.bruto) : null;
+    const prevVolBase = prevFunnel ? (r.canal === 'google' ? prevFunnel.clickoff : prevFunnel.chat_start) : null;
+    const prevPctAsr = (prevFunnel && prevVolBase > 0) ? safeDiv(prevFunnel.leads, prevVolBase) : null;
+    html += '<tr>'
+      + `<td class="partner-cell">${r.id_mp}</td>`
+      + `<td><span class="canal-badge canal-${r.canal}">${r.canal}</span></td>`
+      + `<td class="num">${fmtBRL(r.bruto)}</td>`
+      + `<td class="num">${fmtBRL(r.cashback)}</td>`
+      + `<td class="num ${clsCash}"><span class="cell-volume">${fmtPct(r.pct_cashback)}</span>${deltaSpan(r.pct_cashback, prevPctCashback, 'down_good')}</td>`
+      + `<td class="num">${r.vol_base != null ? `<span class="cell-volume">${fmtNum(r.vol_base)}</span><span class="cell-conv">${r.base_label}</span>` : '<span class="cell-volume">—</span>'}</td>`
+      + `<td class="num">${fmtNum(r.leads)}</td>`
+      + `<td class="num ${clsAsr}"><span class="cell-volume">${(r.vol_base > 0) ? fmtPct(r.pct_assertividade) : '—'}</span>${deltaSpan(r.pct_assertividade, prevPctAsr, 'up_good')}</td>`
+      + '</tr>';
+  }
+  html += '</tbody></table>';
+  if (custom) {
+    html += '<div class="note">Período customizado: Vol. base e % Assertividade não disponíveis (dados de funil detalhado só existem pros períodos padrão 7d/30d/90d/mês). Bruto, Cashback, % Cashback e Leads refletem o intervalo selecionado.</div>';
+  }
+  document.getElementById('coverage-table').innerHTML = html;
+}
+
+function render() {
+  renderKPIs();
+  applyCanalVisibility();
+  renderFunnelGoogle();
+  renderFunnelMeta();
+  renderCoverage();
+  renderProgressao();
+  renderDetailTable();
+  if (typeof Chart !== 'undefined') renderChartTime();
+}
+
+// ─────────── Progressão por Partner ───────────
+function buildMonthlyForPartner(id_mp) {
+  const months = ['2026-02','2026-03','2026-04','2026-05','2026-06'];
+  return months.map(m => {
+    const sG = SNAPSHOT.find(s => s.period_key === m && s.id_mp === id_mp && s.canal === 'google');
+    const sM = SNAPSHOT.find(s => s.period_key === m && s.id_mp === id_mp && s.canal === 'meta');
+    const fG = FUNNEL_GOOGLE.find(f => f.p_key === m && f.id_mp === id_mp);
+    const fM = FUNNEL_META.find(f => f.p_key === m && f.id_mp === id_mp);
+    const bruto    = (sG?.bruto    || 0) + (sM?.bruto    || 0);
+    const cashback = (sG?.cashback || 0) + (sM?.cashback || 0);
+    const liquido  = (sG?.liquido  || 0) + (sM?.liquido  || 0);
+    return {
+      label: ({'01':'jan','02':'fev','03':'mar','04':'abr','05':'mai','06':'jun','07':'jul','08':'ago','09':'set','10':'out','11':'nov','12':'dez'})[m.slice(5)] + '/' + m.slice(2,4),
+      bruto, cashback, liquido,
+      cliques_g: fG?.cliques || 0, clickoff_g: fG?.clickoff || 0, leads_g: fG?.leads || 0, vendas_g: fG?.vendas || 0,
+      cliques_m: fM?.cliques || 0, chat_start_m: fM?.chat_start || 0, leads_m: fM?.leads || 0, vendas_m: fM?.vendas || 0,
+      _has_any: bruto > 0 || (fG?.cliques || 0) > 0 || (fM?.chat_start || 0) > 0,
+    };
+  }).filter(r => r._has_any);
+}
+function buildWeeklyForPartner(id_mp) {
+  const arr = PARTNER_WEEKLY[id_mp] || [];
+  return arr.map(r => ({
+    label: r.ws.slice(5).replace('-', '/'),
+    bruto: r.bruto, cashback: r.cashback, liquido: r.liquido,
+    cliques_g: r.cliques_g, clickoff_g: r.clickoff_g, leads_g: r.leads_g, vendas_g: r.vendas_g,
+    cliques_m: r.cliques_m, chat_start_m: r.chat_start_m, leads_m: r.leads_m, vendas_m: r.vendas_m,
+  }));
+}
+function renderProgressaoTableFor(id_mp) {
+  const data = state.progGran === 'weekly' ? buildWeeklyForPartner(id_mp) : buildMonthlyForPartner(id_mp);
+  if (!data.length) return '<div class="note">Sem dados de progressão pra esse partner no formato selecionado.</div>';
+  // Computa derivadas
+  const enriched = data.map(r => {
+    const cliques = r.cliques_g + r.cliques_m;
+    const leads = r.leads_g + r.leads_m;
+    const vendas = r.vendas_g + r.vendas_m;
+    return {
+      ...r,
+      cliques, leads, vendas,
+      pct_cashback: safeDiv(r.cashback, r.bruto),
+      cpl: safeDiv(r.liquido, leads),
+      cac: safeDiv(r.liquido, vendas),
+      lead_venda: safeDiv(vendas, leads),
+      asr_g: safeDiv(r.leads_g, r.clickoff_g),
+      asr_m: safeDiv(r.leads_m, r.chat_start_m),
+    };
+  });
+  const metricas = [
+    { label: 'Investimento bruto', f: (r) => fmtBRL(r.bruto) },
+    { label: 'Cashback',           f: (r) => fmtBRL(r.cashback) },
+    { label: 'Investimento líq.',  f: (r) => fmtBRL(r.liquido) },
+    { label: '% Cashback',         f: (r) => fmtPct(r.pct_cashback) },
+    { label: 'Cliques (G + M)',    f: (r) => fmtNum(r.cliques) },
+    { label: 'Clickoff (Google)',  f: (r) => fmtNum(r.clickoff_g) },
+    { label: 'Chat start (Meta)',  f: (r) => fmtNum(r.chat_start_m) },
+    { label: 'Leads*',             f: (r) => fmtNum(r.leads) },
+    { label: 'Vendas',             f: (r) => fmtNum(r.vendas) },
+    { label: 'CPL líq.',           f: (r) => r.cpl == null ? '—' : fmtBRL(r.cpl) },
+    { label: 'CAC líq.',           f: (r) => r.cac == null ? '—' : fmtBRL(r.cac) },
+    { label: 'Lead → Venda',       f: (r) => fmtPct(r.lead_venda) },
+    { label: '% Assert. Google',   f: (r) => r.clickoff_g > 0 ? fmtPct(r.asr_g) : '—' },
+    { label: '% Assert. Meta',     f: (r) => r.chat_start_m > 0 ? fmtPct(r.asr_m) : '—' },
+  ];
+  let html = '<table><thead><tr><th>Métrica</th>';
+  for (const r of enriched) html += `<th class="num-h">${r.label}</th>`;
+  html += '</tr></thead><tbody>';
+  for (const m of metricas) {
+    html += `<tr><td class="partner-cell">${m.label}</td>`;
+    for (const r of enriched) html += `<td class="num">${m.f(r)}</td>`;
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+function renderProgressao() {
+  const section = document.getElementById('progressao-section');
+  section.style.display = '';
+  if (state.partners.length === 0) {
+    document.getElementById('progressao-table').innerHTML = '<div class="note" style="padding:24px;text-align:center;font-style:normal;">↑ Selecione 1 ou mais <strong>Partners</strong> no filtro do topo pra ver a progressão deles ao longo do tempo. Quando estiver com "Todos", esta seção fica vazia (precisaria gerar uma tabela por partner).</div>';
+    return;
+  }
+  let html = '';
+  for (const id_mp of state.partners) {
+    html += `<h3 style="font-size:14px;font-weight:600;margin:${html ? '20px' : '0'} 0 8px;">${id_mp}</h3>`;
+    html += renderProgressaoTableFor(id_mp);
+  }
+  document.getElementById('progressao-table').innerHTML = html;
+}
+
+function wireFilters() {
+  // Botões cumulativos (7d/30d/90d) — limpam o dropdown de mês
+  document.querySelectorAll('#period-group button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#period-group button').forEach(x => x.removeAttribute('aria-pressed'));
+      b.setAttribute('aria-pressed', 'true');
+      state.period = b.dataset.period;
+      localStorage.setItem(LS_PERIOD, state.period);
+      const sel = document.getElementById('month-select');
+      sel.value = '';
+      sel.dataset.active = 'false';
+      render();
+    });
+  });
+  // Dropdown de mês — desseleciona os botões cumulativos
+  document.getElementById('month-select').addEventListener('change', (e) => {
+    const v = e.target.value;
+    if (!v) return;
+    document.querySelectorAll('#period-group button').forEach(x => x.removeAttribute('aria-pressed'));
+    state.period = v;
+    localStorage.setItem(LS_PERIOD, state.period);
+    e.target.dataset.active = 'true';
+    render();
+  });
+  // Período personalizado (2 inputs de data)
+  function handleCustomDateChange() {
+    const startEl = document.getElementById('custom-date-start');
+    const endEl = document.getElementById('custom-date-end');
+    state.customStart = startEl.value || '';
+    state.customEnd = endEl.value || '';
+    localStorage.setItem(LS_CUSTOM_START, state.customStart);
+    localStorage.setItem(LS_CUSTOM_END, state.customEnd);
+    if (state.customStart && state.customEnd) {
+      document.querySelectorAll('#period-group button').forEach(x => x.removeAttribute('aria-pressed'));
+      document.getElementById('month-select').value = '';
+      document.getElementById('month-select').dataset.active = 'false';
+      state.period = 'custom';
+      localStorage.setItem(LS_PERIOD, state.period);
+      render();
+    }
+  }
+  document.getElementById('custom-date-start').addEventListener('change', handleCustomDateChange);
+  document.getElementById('custom-date-end').addEventListener('change', handleCustomDateChange);
+  // Canal
+  document.querySelectorAll('#canal-group button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#canal-group button').forEach(x => x.removeAttribute('aria-pressed'));
+      b.setAttribute('aria-pressed', 'true');
+      state.canal = b.dataset.canal;
+      localStorage.setItem(LS_CANAL, state.canal);
+      render();
+    });
+  });
+  // Partner (multi-select em painel dropdown)
+  function persistPartners() {
+    localStorage.setItem(LS_PARTNER, state.partners.join(','));
+    const toggle = document.getElementById('partner-ms-toggle');
+    toggle.textContent = state.partners.length === 0
+      ? 'Todos ▾'
+      : (state.partners.length === 1 ? state.partners[0] : `${state.partners.length} partners`) + ' ▾';
+    toggle.dataset.active = state.partners.length > 0 ? 'true' : 'false';
+  }
+  const partnerToggle = document.getElementById('partner-ms-toggle');
+  const partnerPanel = document.getElementById('partner-ms-panel');
+  partnerToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    partnerPanel.hidden = !partnerPanel.hidden;
+  });
+  document.addEventListener('click', (e) => {
+    if (!partnerPanel.hidden && !document.getElementById('partner-multiselect').contains(e.target)) {
+      partnerPanel.hidden = true;
+    }
+  });
+  document.getElementById('partner-ms-clear').addEventListener('change', (e) => {
+    if (e.target.checked) {
+      state.partners = [];
+      document.querySelectorAll('.partner-ms-cb').forEach(cb => cb.checked = false);
+      persistPartners();
+      render();
+    }
+    e.target.checked = false;
+  });
+  document.querySelectorAll('.partner-ms-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = Array.from(document.querySelectorAll('.partner-ms-cb')).filter(x => x.checked).map(x => x.value);
+      state.partners = checked;
+      persistPartners();
+      render();
+    });
+  });
+  document.querySelectorAll('#progressao-gran button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#progressao-gran button').forEach(x => x.removeAttribute('aria-pressed'));
+      b.setAttribute('aria-pressed', 'true');
+      state.progGran = b.dataset.gran;
+      localStorage.setItem('mpa_prog_gran', state.progGran);
+      renderProgressao();
+    });
+  });
+  document.getElementById('compare-toggle').addEventListener('click', (e) => {
+    state.compare = !state.compare;
+    localStorage.setItem(LS_COMPARE, state.compare ? '1' : '0');
+    e.currentTarget.dataset.active = state.compare ? 'true' : 'false';
+    render();
+  });
+  // refresh-btn: standalone — sem ação automática
+}
+
+function applyStoredSelections() {
+  const isMonthPeriod = isMonth(state.period);
+  document.querySelectorAll('#period-group button').forEach(b => {
+    b.removeAttribute('aria-pressed');
+    if (!isMonthPeriod && state.period !== 'custom' && b.dataset.period === state.period) b.setAttribute('aria-pressed', 'true');
+  });
+  const monthSel = document.getElementById('month-select');
+  monthSel.value = isMonthPeriod ? state.period : '';
+  monthSel.dataset.active = isMonthPeriod ? 'true' : 'false';
+  document.getElementById('custom-date-start').value = state.customStart || '';
+  document.getElementById('custom-date-end').value = state.customEnd || '';
+  document.querySelectorAll('#canal-group button').forEach(b => {
+    b.removeAttribute('aria-pressed');
+    if (b.dataset.canal === state.canal) b.setAttribute('aria-pressed', 'true');
+  });
+  document.querySelectorAll('.partner-ms-cb').forEach(cb => {
+    cb.checked = state.partners.includes(cb.value);
+  });
+  const partnerToggle = document.getElementById('partner-ms-toggle');
+  partnerToggle.textContent = state.partners.length === 0
+    ? 'Todos ▾'
+    : (state.partners.length === 1 ? state.partners[0] : `${state.partners.length} partners`) + ' ▾';
+  partnerToggle.dataset.active = state.partners.length > 0 ? 'true' : 'false';
+  const compareBtn = document.getElementById('compare-toggle');
+  if (compareBtn) compareBtn.dataset.active = state.compare ? 'true' : 'false';
+  document.querySelectorAll('#progressao-gran button').forEach(b => {
+    b.removeAttribute('aria-pressed');
+    if (b.dataset.gran === state.progGran) b.setAttribute('aria-pressed', 'true');
+  });
+}
+
+// ─────────── Snapshot freshness ───────────
+function updateFreshnessBadge() {
+  const el = document.getElementById('snapshot-time');
+  const snapMs = new Date(SNAPSHOT_ISO).getTime();
+  const ageMs  = Date.now() - snapMs;
+  const ageH   = Math.floor(ageMs / 36e5);
+  const ageD   = Math.floor(ageH / 24);
+  let humanAge;
+  if (ageH < 1) humanAge = 'agora há pouco';
+  else if (ageH < 24) humanAge = `${ageH}h atrás`;
+  else humanAge = `${ageD}d atrás`;
+  el.classList.remove('fresh','aging','stale');
+  el.classList.add(ageH < 24 ? 'fresh' : ageH < 72 ? 'aging' : 'stale');
+  el.innerHTML = `snapshot ${humanAge} (até ${SNAPSHOT_COVER})`;
+}
+updateFreshnessBadge();
+applyStoredSelections();
+wireFilters();
+render();
+
+</script>
+</body>
+</html>
