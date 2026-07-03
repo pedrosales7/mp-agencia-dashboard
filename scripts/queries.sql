@@ -231,6 +231,18 @@ ORDER BY cl.cliques DESC NULLS LAST;
 -- CHANGELOG 2026-07-02: mesma correção do FUNNEL_GOOGLE — esta query
 -- PRECISA rodar 4x por refresh (janelas 7d/30d/90d/mês corrente), não
 -- só pro mês corrente. Ver nota completa na query FUNNEL_GOOGLE acima.
+--
+-- CHANGELOG 2026-07-03: troca de `clicks` pra `unique_clicks` na CTE
+-- `clicks`. Causa raiz do bug "cliques do dashboard muito acima do
+-- Looker" (Pedro): `clicks` é cliques totais do Meta (inclui curtida/
+-- comentário/compartilhamento, não só clique no link) — inflava o
+-- número sempre pra cima, com razão variável por campanha. `unique_clicks`
+-- aproxima melhor o que o Looker mostra, mas não bate 100%: métricas
+-- "únicas" do Meta deduplicam só dentro do dia, então somar linhas
+-- diárias ainda pode contar 2x quem clicou em dias diferentes do mesmo
+-- mês (o Looker pede o mês inteiro numa chamada só, dedup real). Sem
+-- solução trivial pra paridade exata — ver outputs/mp-data-context/
+-- references/gotchas.md.
 -- ============================================================
 -- [QUERY:FUNNEL_META]
 WITH periodo AS (
@@ -244,7 +256,7 @@ campaign_config AS (
     WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
 ),
 clicks AS (
-    SELECT cf.partnership_id, SUM(f.clicks) AS cliques
+    SELECT cf.partnership_id, SUM(f.unique_clicks) AS cliques
     FROM ads.facebook_ads_daily_data f
     JOIN campaign_config cf ON cf.campaign_name = f.campaign_name
     JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
@@ -410,7 +422,8 @@ cliques_g AS (
     GROUP BY 1, 2
 ),
 cliques_m AS (
-    SELECT DATE_TRUNC('week', f.date::date)::date AS semana, p.id_mp, SUM(f.clicks) AS cliques_m
+    -- CHANGELOG 2026-07-03: `clicks` -> `unique_clicks`, mesma correção da FUNNEL_META acima.
+    SELECT DATE_TRUNC('week', f.date::date)::date AS semana, p.id_mp, SUM(f.unique_clicks) AS cliques_m
     FROM ads.facebook_ads_daily_data f
     JOIN config_m cf ON cf.campaign_name = f.campaign_name
     JOIN pid p ON p.partnership_id = cf.partnership_id
@@ -628,6 +641,10 @@ ORDER BY 1, 2;
 -- Validado contra o funil de 7d em produção: bate exato em todos
 -- os campos (nenhum usa COUNT DISTINCT, então não tem o problema
 -- de fronteira de dia que existe em DAILY_FUNNEL_GOOGLE.sessoes).
+--
+-- CHANGELOG 2026-07-03: `clicks` -> `unique_clicks` na CTE `clicks`,
+-- mesma correção da FUNNEL_META (ver changelog lá pra detalhe da causa
+-- raiz e da limitação de paridade com o Looker).
 -- ============================================================
 -- [QUERY:DAILY_FUNNEL_META]
 WITH periodo AS (
@@ -640,7 +657,7 @@ campaign_config AS (
     WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
 ),
 clicks AS (
-    SELECT cf.partnership_id, f.date::date AS dia, SUM(f.clicks) AS cliques
+    SELECT cf.partnership_id, f.date::date AS dia, SUM(f.unique_clicks) AS cliques
     FROM ads.facebook_ads_daily_data f
     JOIN campaign_config cf ON cf.campaign_name = f.campaign_name
     JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
