@@ -518,3 +518,205 @@ FULL OUTER JOIN leads_vendas lv
     ON lv.dia = i.dia AND lv.id_mp = i.id_mp AND lv.canal = i.canal
 ORDER BY 1, 2, 3;
 -- [/QUERY:DAILY_SNAPSHOT]
+
+
+-- ============================================================
+-- QUERY 8: DAILY_FUNNEL_GOOGLE
+-- Granularidade diária das etapas do funil Google (cliques/sessões/
+-- clickoff/redirect) por partner, últimos 180 dias a partir do cutoff.
+-- Adicionada em 2026-07-03 pra permitir que "Funil completo Google"
+-- funcione também com o filtro de período customizado (antes só
+-- funcionava para 7d/30d/90d/mês, porque DAILY_SNAPSHOT não guarda
+-- essas etapas intermediárias, só investimento/leads/vendas).
+--
+-- Nota de validação: "sessões" usa COUNT(DISTINCT session_id) — ao
+-- agregar por dia e depois somar num range, uma sessão que atravessa
+-- a virada da meia-noite pode ser contada 2x (uma por dia). Validado
+-- contra o funil de 7d em produção: erro de ~1% nesse campo específico,
+-- 0% nos demais (cliques/clickoff/redirect são aditivos, sem esse problema).
+-- ============================================================
+-- [QUERY:DAILY_FUNNEL_GOOGLE]
+WITH periodo AS (
+    SELECT '{{CUTOFF}}'::date - 179 AS d_ini,
+           '{{CUTOFF}}'::date       AS d_fim
+),
+config AS (
+    SELECT DISTINCT partnership_id, utm_campaign, campaign_name
+    FROM backoffice.db_backoffice_lead_agency_paid_media_config
+    WHERE deleted_at IS NULL AND utm_source = 'google'
+),
+clicks AS (
+    SELECT cf.partnership_id, g.date AS dia, SUM(g.clicks) AS cliques
+    FROM ads.google_ads_campaigns_daily_data g
+    JOIN config cf ON cf.campaign_name = g.name
+    JOIN periodo ON g.date BETWEEN periodo.d_ini AND periodo.d_fim
+    GROUP BY 1, 2
+),
+sessions AS (
+    SELECT cf.partnership_id, pl._timestamp::date AS dia, COUNT(DISTINCT pl.session_id) AS sessoes
+    FROM comparison.page_load pl
+    JOIN config cf ON cf.utm_campaign = pl.user_landing_page_utm_campaign
+    JOIN periodo ON pl._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    WHERE LOWER(pl.user_landing_page_utm_source) LIKE '%google%'
+    GROUP BY 1, 2
+),
+clickoffs AS (
+    SELECT cf.partnership_id, c._timestamp::date AS dia, COUNT(*) AS clickoffs
+    FROM comparison.clickoff c
+    JOIN config cf ON cf.utm_campaign = c.user_landing_page_utm_campaign
+    JOIN periodo ON c._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    WHERE LOWER(c.user_landing_page_utm_source) LIKE '%google%'
+    GROUP BY 1, 2
+),
+redirects AS (
+    SELECT cf.partnership_id, cr._timestamp::date AS dia, COUNT(*) AS redirects_total
+    FROM comparison.clickoff_redirect cr
+    JOIN config cf ON cf.utm_campaign = cr.user_landing_page_utm_campaign
+    JOIN periodo ON cr._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    WHERE LOWER(cr.user_landing_page_utm_source) LIKE '%google%'
+    GROUP BY 1, 2
+),
+leads_e_vendas AS (
+    SELECT cf.partnership_id, ld.created_at::date AS dia,
+           COUNT(*) AS leads,
+           SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
+    FROM checkout.lead_detail ld
+    JOIN config cf ON cf.utm_campaign = ld.campaign
+    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    WHERE ld.source = 'google' AND ld.lead_accepted = true
+    GROUP BY 1, 2
+),
+days_partners AS (
+    SELECT DISTINCT dia, partnership_id FROM (
+        SELECT dia, partnership_id FROM clicks
+        UNION SELECT dia, partnership_id FROM sessions
+        UNION SELECT dia, partnership_id FROM clickoffs
+        UNION SELECT dia, partnership_id FROM redirects
+        UNION SELECT dia, partnership_id FROM leads_e_vendas
+    ) u
+),
+mapping AS (
+    SELECT partnership_id, MAX(id_mp) AS id_mp
+    FROM midia_paga.performance_partner_mp_agency
+    WHERE date >= '{{CUTOFF}}'::date - 269
+    GROUP BY 1
+)
+SELECT
+    dp.dia, m.id_mp,
+    COALESCE(cl.cliques,0) AS cliques,
+    COALESCE(s.sessoes,0) AS sessoes,
+    COALESCE(co.clickoffs,0) AS clickoff,
+    COALESCE(r.redirects_total,0) AS redirect,
+    COALESCE(lv.leads,0) AS leads,
+    COALESCE(lv.vendas,0) AS vendas
+FROM days_partners dp
+JOIN mapping m ON m.partnership_id = dp.partnership_id
+LEFT JOIN clicks cl ON cl.partnership_id = dp.partnership_id AND cl.dia = dp.dia
+LEFT JOIN sessions s ON s.partnership_id = dp.partnership_id AND s.dia = dp.dia
+LEFT JOIN clickoffs co ON co.partnership_id = dp.partnership_id AND co.dia = dp.dia
+LEFT JOIN redirects r ON r.partnership_id = dp.partnership_id AND r.dia = dp.dia
+LEFT JOIN leads_e_vendas lv ON lv.partnership_id = dp.partnership_id AND lv.dia = dp.dia
+ORDER BY 1, 2;
+-- [/QUERY:DAILY_FUNNEL_GOOGLE]
+
+
+-- ============================================================
+-- QUERY 9: DAILY_FUNNEL_META
+-- Equivalente ao DAILY_FUNNEL_GOOGLE, pro funil Meta/WhatsApp
+-- (cliques/chat_start/zip_search/redirect). ARMADILHA CRÍTICA:
+-- usar DISTINCT id_mp_canon no label_map, igual FUNNEL_META.
+-- Validado contra o funil de 7d em produção: bate exato em todos
+-- os campos (nenhum usa COUNT DISTINCT, então não tem o problema
+-- de fronteira de dia que existe em DAILY_FUNNEL_GOOGLE.sessoes).
+-- ============================================================
+-- [QUERY:DAILY_FUNNEL_META]
+WITH periodo AS (
+    SELECT '{{CUTOFF}}'::date - 179 AS d_ini,
+           '{{CUTOFF}}'::date       AS d_fim
+),
+campaign_config AS (
+    SELECT DISTINCT partnership_id, campaign_name
+    FROM backoffice.db_backoffice_lead_agency_paid_media_config
+    WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
+),
+clicks AS (
+    SELECT cf.partnership_id, f.date::date AS dia, SUM(f.clicks) AS cliques
+    FROM ads.facebook_ads_daily_data f
+    JOIN campaign_config cf ON cf.campaign_name = f.campaign_name
+    JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
+    GROUP BY 1, 2
+),
+label_map AS (
+    SELECT DISTINCT id_mp AS id_mp_canon, partnership_id, agent_label FROM (
+        SELECT 'mpa.loga-internet'                       AS agent_label, '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
+        SELECT 'mpa.loga-internet@loga-internet',                       '011f62ae-d224-4569-9697-542f959685b2', 'loga-internet'                          UNION ALL
+        SELECT 'mpa.the-fiber-internet',                                'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
+        SELECT 'mpa.interplus internet',                                '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
+        SELECT 'mpa.direct-internet',                                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
+        SELECT 'mpa.direct internet@direct internet',                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
+        SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
+        SELECT 'mpa.unifique',                                          'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                               UNION ALL
+        SELECT 'mpa.ultranet-network@ultranet-network',                 '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                       UNION ALL
+        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+    ) x
+),
+chat_start AS (
+    SELECT m.partnership_id, c._timestamp::date AS dia, COUNT(*) AS conversas
+    FROM whatsapp_assistant.wa_chat_start c
+    JOIN label_map m ON m.agent_label = c.referral_agent_label
+    JOIN periodo ON c._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    GROUP BY 1, 2
+),
+zip_search AS (
+    SELECT m.partnership_id, z._timestamp::date AS dia, COUNT(*) AS zip_search
+    FROM whatsapp_assistant.wa_zip_search z
+    JOIN label_map m ON m.agent_label = z.referral_agent_label
+    JOIN periodo ON z._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    GROUP BY 1, 2
+),
+redirects AS (
+    SELECT m.partnership_id, r._timestamp::date AS dia, COUNT(*) AS redirects
+    FROM whatsapp_assistant.wa_redirect r
+    JOIN label_map m ON m.agent_label = r.referral_agent_label
+    JOIN periodo ON r._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    GROUP BY 1, 2
+),
+leads_e_vendas AS (
+    SELECT m.partnership_id, ld.created_at::date AS dia,
+           COUNT(DISTINCT ld.id) AS leads,
+           SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
+    FROM checkout.lead_detail ld
+    JOIN whatsapp_assistant.wa_chat_start wcs
+        ON wcs.user_id = ld.user_id
+       AND wcs._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
+    JOIN label_map m ON m.agent_label = wcs.referral_agent_label
+    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    WHERE ld.source = 'whatsapp' AND ld.lead_accepted = true
+    GROUP BY 1, 2
+),
+base AS (SELECT DISTINCT id_mp_canon, partnership_id FROM label_map),
+days_partners AS (
+    SELECT DISTINCT dia, partnership_id FROM (
+        SELECT dia, partnership_id FROM clicks
+        UNION SELECT dia, partnership_id FROM chat_start
+        UNION SELECT dia, partnership_id FROM zip_search
+        UNION SELECT dia, partnership_id FROM redirects
+        UNION SELECT dia, partnership_id FROM leads_e_vendas
+    ) u
+)
+SELECT dp.dia, b.id_mp_canon AS id_mp,
+       COALESCE(cl.cliques,0) AS cliques,
+       COALESCE(cs.conversas,0) AS chat_start,
+       COALESCE(zs.zip_search,0) AS zip_search,
+       COALESCE(r.redirects,0) AS redirect,
+       COALESCE(lv.leads,0) AS leads,
+       COALESCE(lv.vendas,0) AS vendas
+FROM days_partners dp
+JOIN base b ON b.partnership_id = dp.partnership_id
+LEFT JOIN clicks cl ON cl.partnership_id = dp.partnership_id AND cl.dia = dp.dia
+LEFT JOIN chat_start cs ON cs.partnership_id = dp.partnership_id AND cs.dia = dp.dia
+LEFT JOIN zip_search zs ON zs.partnership_id = dp.partnership_id AND zs.dia = dp.dia
+LEFT JOIN redirects r ON r.partnership_id = dp.partnership_id AND r.dia = dp.dia
+LEFT JOIN leads_e_vendas lv ON lv.partnership_id = dp.partnership_id AND lv.dia = dp.dia
+ORDER BY 1, 2;
+-- [/QUERY:DAILY_FUNNEL_META]

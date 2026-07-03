@@ -153,6 +153,54 @@ def build_compact_daily(rows):
     return compact
 
 
+def build_compact_daily_funnel(fg_rows, fm_rows):
+    """Compacta as etapas diárias de funil por (dia, partner), no mesmo estilo
+    posicional do DAILY_SNAPSHOT — alimenta o funil completo quando o dashboard
+    usa período customizado.
+
+    leads/vendas aqui usam a MESMA atribuição por campanha do FUNNEL_GOOGLE/META
+    (utm_campaign para Google, wa_chat_start+7d para Meta) — não a atribuição por
+    partner_id_partner do DAILY_SNAPSHOT/SNAPSHOT. As duas metodologias já convivem
+    no dashboard (SNAPSHOT usa uma, FUNNEL_GOOGLE/META usa outra); usar a errada
+    aqui faria a tabela de funil customizado mostrar leads/vendas divergentes dos
+    mesmos partners nos períodos fixos (7d/30d/90d/mês), que usam a de campanha."""
+    merged = {}
+
+    def row(dia, id_mp):
+        return merged.setdefault((dia, id_mp), {"cliques_g": 0, "sessoes_g": 0, "clickoff_g": 0, "redirect_g": 0,
+                                                  "leads_g": 0, "vendas_g": 0,
+                                                  "cliques_m": 0, "chat_start_m": 0, "zip_search_m": 0, "redirect_m": 0,
+                                                  "leads_m": 0, "vendas_m": 0})
+
+    for r in fg_rows:
+        if r["id_mp"] not in PIDX:
+            continue
+        d = row(r["dia"], r["id_mp"])
+        d["cliques_g"] += r.get("cliques") or 0
+        d["sessoes_g"] += r.get("sessoes") or 0
+        d["clickoff_g"] += r.get("clickoff") or 0
+        d["redirect_g"] += r.get("redirect") or 0
+        d["leads_g"] += r.get("leads") or 0
+        d["vendas_g"] += r.get("vendas") or 0
+    for r in fm_rows:
+        if r["id_mp"] not in PIDX:
+            continue
+        d = row(r["dia"], r["id_mp"])
+        d["cliques_m"] += r.get("cliques") or 0
+        d["chat_start_m"] += r.get("chat_start") or 0
+        d["zip_search_m"] += r.get("zip_search") or 0
+        d["redirect_m"] += r.get("redirect") or 0
+        d["leads_m"] += r.get("leads") or 0
+        d["vendas_m"] += r.get("vendas") or 0
+
+    compact = []
+    for (dia, id_mp), d in sorted(merged.items()):
+        compact.append([dia, PIDX[id_mp],
+            d["cliques_g"], d["sessoes_g"], d["clickoff_g"], d["redirect_g"], d["leads_g"], d["vendas_g"],
+            d["cliques_m"], d["chat_start_m"], d["zip_search_m"], d["redirect_m"], d["leads_m"], d["vendas_m"]])
+    return compact
+
+
 def ensure_ds_partners(html):
     block = "const DS_PARTNERS = " + json.dumps(VALID_PARTNERS, ensure_ascii=False) + ";\n"
     if "const DS_PARTNERS" in html:
@@ -228,6 +276,12 @@ def main():
     daily_sql = queries["DAILY_SNAPSHOT"].replace("{{CUTOFF}}", cutoff)
     fresh_daily = [dict(r, dia=norm_date(r["dia"])) for r in run("DAILY_SNAPSHOT", daily_sql)]
 
+    # DAILY_FUNNEL_GOOGLE / DAILY_FUNNEL_META — alimentam o funil completo no período customizado
+    dfg_sql = queries["DAILY_FUNNEL_GOOGLE"].replace("{{CUTOFF}}", cutoff)
+    fresh_dfg = [dict(r, dia=norm_date(r["dia"])) for r in run("DAILY_FUNNEL_GOOGLE", dfg_sql)]
+    dfm_sql = queries["DAILY_FUNNEL_META"].replace("{{CUTOFF}}", cutoff)
+    fresh_dfm = [dict(r, dia=norm_date(r["dia"])) for r in run("DAILY_FUNNEL_META", dfm_sql)]
+
     # FUNNEL_GOOGLE / FUNNEL_META — 4 janelas cada
     windows = {
         "7d": ((cutoff_dt - timedelta(days=6)).isoformat(), cutoff),
@@ -271,6 +325,18 @@ def main():
     all_daily = sorted(old_daily + fresh_daily, key=lambda x: x["dia"])
     prune_daily = (cutoff_dt - timedelta(days=180)).isoformat()
     all_daily = [r for r in all_daily if r["dia"] >= prune_daily]
+
+    fresh_dfg_keys = {(r["dia"], r["id_mp"]) for r in fresh_dfg}
+    old_dfg = [r for r in cache.get("daily_funnel_google", []) if (r["dia"], r["id_mp"]) not in fresh_dfg_keys]
+    all_dfg = sorted(old_dfg + fresh_dfg, key=lambda x: x["dia"])
+    all_dfg = [r for r in all_dfg if r["dia"] >= prune_daily]
+
+    fresh_dfm_keys = {(r["dia"], r["id_mp"]) for r in fresh_dfm}
+    old_dfm = [r for r in cache.get("daily_funnel_meta", []) if (r["dia"], r["id_mp"]) not in fresh_dfm_keys]
+    all_dfm = sorted(old_dfm + fresh_dfm, key=lambda x: x["dia"])
+    all_dfm = [r for r in all_dfm if r["dia"] >= prune_daily]
+
+    daily_funnel_compact = build_compact_daily_funnel(all_dfg, all_dfm)
 
     d = cutoff_dt
     curr_month_ini = date(d.year, d.month, 1).isoformat()
@@ -356,6 +422,7 @@ def main():
     html = sub_array(html, "PREV_FUNNEL_META", existing_prev_fm)
     html = ensure_ds_partners(html)
     html = sub_array(html, "DAILY_SNAPSHOT", daily_compact)
+    html = sub_array(html, "DAILY_FUNNEL", daily_funnel_compact)
     html = sub_obj(html, "PARTNER_WEEKLY", partner_weekly_dict)
     html = sub_obj(html, "CREDIT_TIMESERIES", credit_dict)
     html = re.sub(r'const SNAPSHOT_ISO\s*=\s*"[^"]*"',
@@ -371,6 +438,8 @@ def main():
 
     prune_before_80 = (cutoff_dt - timedelta(days=80)).isoformat()
     cache["daily_snapshot"] = [r for r in all_daily if r["dia"] >= prune_daily]
+    cache["daily_funnel_google"] = all_dfg
+    cache["daily_funnel_meta"] = all_dfm
 
     months = cache.get("months", {})
     months.setdefault(curr_month_key, {})
