@@ -470,7 +470,8 @@ def main():
 
     # ── Slack ─────────────────────────────────────────────────────────────
 
-    link_line = f"\n{PAGES_URL}\n" if PAGES_URL else "\n"
+    dashboard_url = f"{PAGES_URL}?v={cutoff}" if PAGES_URL else None
+    link_line = f"\n{dashboard_url}\n" if dashboard_url else "\n"
     prefix = "🧪 [TESTE — só você vê isso]\n" if TEST_MODE else ""
     channel_mention = "" if TEST_MODE else "\n<!channel>"
     slack_post(
