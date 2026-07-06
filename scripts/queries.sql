@@ -26,13 +26,13 @@ investimento AS (
     GROUP BY 1, 2
 ),
 leads_vendas AS (
-    SELECT ld.partner_id_partner,
+    SELECT CASE WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE ld.partner_id_partner END AS partner_id_partner,
            COUNT(DISTINCT ld.id) AS leads,
            SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas,
            SUM(CASE WHEN ld.source = 'google' THEN 1 ELSE 0 END) AS leads_g,
            SUM(CASE WHEN ld.source = 'whatsapp' THEN 1 ELSE 0 END) AS leads_m
     FROM checkout.lead_detail ld
-    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON ld.created_at >= periodo.d_ini AND ld.created_at < periodo.d_fim + INTERVAL '1 day'
     WHERE ld.source IN ('google','whatsapp') AND ld.lead_accepted = true
     GROUP BY 1
 ),
@@ -77,7 +77,7 @@ investimento AS (
     GROUP BY 1
 ),
 leads_vendas AS (
-    SELECT partner_id_partner,
+    SELECT CASE WHEN partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE partner_id_partner END AS partner_id_partner,
            COUNT(DISTINCT id) AS leads,
            SUM(CASE WHEN current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
     FROM checkout.lead_detail
@@ -152,7 +152,7 @@ sessions AS (
     SELECT cf.partnership_id, COUNT(DISTINCT pl.session_id) AS sessoes
     FROM comparison.page_load pl
     JOIN config cf ON cf.utm_campaign = pl.user_landing_page_utm_campaign
-    JOIN periodo ON pl._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON pl._timestamp >= periodo.d_ini AND pl._timestamp < periodo.d_fim + INTERVAL '1 day'
     WHERE LOWER(pl.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1
 ),
@@ -160,7 +160,7 @@ zip_search AS (
     SELECT cf.partnership_id, COUNT(*) AS zip_search
     FROM comparison.zip_search_click z
     JOIN config cf ON cf.utm_campaign = z.user_landing_page_utm_campaign
-    JOIN periodo ON z._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON z._timestamp >= periodo.d_ini AND z._timestamp < periodo.d_fim + INTERVAL '1 day'
     WHERE LOWER(z.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1
 ),
@@ -168,7 +168,7 @@ clickoffs AS (
     SELECT cf.partnership_id, COUNT(*) AS clickoffs
     FROM comparison.clickoff c
     JOIN config cf ON cf.utm_campaign = c.user_landing_page_utm_campaign
-    JOIN periodo ON c._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON c._timestamp >= periodo.d_ini AND c._timestamp < periodo.d_fim + INTERVAL '1 day'
     WHERE LOWER(c.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1
 ),
@@ -176,7 +176,7 @@ redirects AS (
     SELECT cf.partnership_id, COUNT(*) AS redirects_total
     FROM comparison.clickoff_redirect cr
     JOIN config cf ON cf.utm_campaign = cr.user_landing_page_utm_campaign
-    JOIN periodo ON cr._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON cr._timestamp >= periodo.d_ini AND cr._timestamp < periodo.d_fim + INTERVAL '1 day'
     WHERE LOWER(cr.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1
 ),
@@ -186,7 +186,7 @@ leads_e_vendas AS (
            SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
     FROM checkout.lead_detail ld
     JOIN config cf ON cf.utm_campaign = ld.campaign
-    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON ld.created_at >= periodo.d_ini AND ld.created_at < periodo.d_fim + INTERVAL '1 day'
     WHERE ld.source = 'google' AND ld.lead_accepted = true
     GROUP BY 1
 )
@@ -288,21 +288,21 @@ chat_start AS (
     SELECT m.partnership_id, COUNT(*) AS conversas
     FROM whatsapp_assistant.wa_chat_start c
     JOIN label_map m ON m.agent_label = c.referral_agent_label
-    JOIN periodo ON c._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON c._timestamp >= periodo.d_ini AND c._timestamp < periodo.d_fim + INTERVAL '1 day'
     GROUP BY 1
 ),
 zip_search AS (
     SELECT m.partnership_id, COUNT(*) AS zip_search
     FROM whatsapp_assistant.wa_zip_search z
     JOIN label_map m ON m.agent_label = z.referral_agent_label
-    JOIN periodo ON z._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON z._timestamp >= periodo.d_ini AND z._timestamp < periodo.d_fim + INTERVAL '1 day'
     GROUP BY 1
 ),
 get_plans AS (
     SELECT m.partnership_id, COUNT(*) AS get_plans
     FROM whatsapp_assistant.wa_get_plans g
     JOIN label_map m ON m.agent_label = g.referral_agent_label
-    JOIN periodo ON g._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON g._timestamp >= periodo.d_ini AND g._timestamp < periodo.d_fim + INTERVAL '1 day'
     GROUP BY 1
 ),
 redirects AS (
@@ -312,7 +312,7 @@ redirects AS (
            SUM(CASE WHEN LOWER(r.plan_provider) <> LOWER(m.id_mp_canon) AND r.plan_provider IS NOT NULL THEN 1 ELSE 0 END) AS red_cashback
     FROM whatsapp_assistant.wa_redirect r
     JOIN label_map m ON m.agent_label = r.referral_agent_label
-    JOIN periodo ON r._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON r._timestamp >= periodo.d_ini AND r._timestamp < periodo.d_fim + INTERVAL '1 day'
     GROUP BY 1
 ),
 leads_e_vendas AS (
@@ -324,7 +324,7 @@ leads_e_vendas AS (
         ON wcs.user_id = ld.user_id
        AND wcs._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
     JOIN label_map m ON m.agent_label = wcs.referral_agent_label
-    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON ld.created_at >= periodo.d_ini AND ld.created_at < periodo.d_fim + INTERVAL '1 day'
     WHERE ld.source = 'whatsapp' AND ld.lead_accepted = true
     GROUP BY 1
 )
@@ -435,7 +435,7 @@ clickoff_g AS (
     FROM comparison.clickoff c
     JOIN config_g cf ON cf.utm_campaign = c.user_landing_page_utm_campaign
     JOIN pid p ON p.partnership_id = cf.partnership_id
-    WHERE c._timestamp BETWEEN '{{WEEKLY_START}}'::date AND '{{CUTOFF}}'::date
+    WHERE c._timestamp >= '{{WEEKLY_START}}'::date AND c._timestamp < '{{CUTOFF}}'::date + INTERVAL '1 day'
       AND LOWER(c.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1, 2
 ),
@@ -443,19 +443,19 @@ chat_start_m AS (
     SELECT DATE_TRUNC('week', cs._timestamp)::date AS semana, lm.id_mp_canon AS id_mp, COUNT(*) AS chat_start_m
     FROM whatsapp_assistant.wa_chat_start cs
     JOIN label_map lm ON lm.agent_label = cs.referral_agent_label
-    WHERE cs._timestamp BETWEEN '{{WEEKLY_START}}'::date AND '{{CUTOFF}}'::date
+    WHERE cs._timestamp >= '{{WEEKLY_START}}'::date AND cs._timestamp < '{{CUTOFF}}'::date + INTERVAL '1 day'
     GROUP BY 1, 2
 ),
 leads_semana AS (
     SELECT DATE_TRUNC('week', created_at)::date AS semana,
-           partner_id_partner AS id_mp,
+           CASE WHEN partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE partner_id_partner END AS id_mp,
            SUM(CASE WHEN source = 'google'   THEN 1 ELSE 0 END) AS leads_g,
            SUM(CASE WHEN source = 'google'   AND current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas_g,
            SUM(CASE WHEN source = 'whatsapp' THEN 1 ELSE 0 END) AS leads_m,
            SUM(CASE WHEN source = 'whatsapp' AND current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas_m
     FROM checkout.lead_detail
     WHERE source IN ('google','whatsapp') AND lead_accepted = true
-      AND created_at BETWEEN '{{WEEKLY_START}}'::date AND '{{CUTOFF}}'::date
+      AND created_at >= '{{WEEKLY_START}}'::date AND created_at < '{{CUTOFF}}'::date + INTERVAL '1 day'
     GROUP BY 1, 2
 )
 SELECT s.semana, s.id_mp,
@@ -508,7 +508,7 @@ investimento AS (
 ),
 leads_vendas AS (
     SELECT ld.created_at::date AS dia,
-           ld.partner_id_partner AS id_mp,
+           CASE WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE ld.partner_id_partner END AS id_mp,
            CASE WHEN ld.source = 'google' THEN 'google' ELSE 'meta' END AS canal,
            COUNT(DISTINCT ld.id) AS leads,
            SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
@@ -569,7 +569,7 @@ sessions AS (
     SELECT cf.partnership_id, pl._timestamp::date AS dia, COUNT(DISTINCT pl.session_id) AS sessoes
     FROM comparison.page_load pl
     JOIN config cf ON cf.utm_campaign = pl.user_landing_page_utm_campaign
-    JOIN periodo ON pl._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON pl._timestamp >= periodo.d_ini AND pl._timestamp < periodo.d_fim + INTERVAL '1 day'
     WHERE LOWER(pl.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1, 2
 ),
@@ -577,7 +577,7 @@ clickoffs AS (
     SELECT cf.partnership_id, c._timestamp::date AS dia, COUNT(*) AS clickoffs
     FROM comparison.clickoff c
     JOIN config cf ON cf.utm_campaign = c.user_landing_page_utm_campaign
-    JOIN periodo ON c._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON c._timestamp >= periodo.d_ini AND c._timestamp < periodo.d_fim + INTERVAL '1 day'
     WHERE LOWER(c.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1, 2
 ),
@@ -585,7 +585,7 @@ redirects AS (
     SELECT cf.partnership_id, cr._timestamp::date AS dia, COUNT(*) AS redirects_total
     FROM comparison.clickoff_redirect cr
     JOIN config cf ON cf.utm_campaign = cr.user_landing_page_utm_campaign
-    JOIN periodo ON cr._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON cr._timestamp >= periodo.d_ini AND cr._timestamp < periodo.d_fim + INTERVAL '1 day'
     WHERE LOWER(cr.user_landing_page_utm_source) LIKE '%google%'
     GROUP BY 1, 2
 ),
@@ -595,7 +595,7 @@ leads_e_vendas AS (
            SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
     FROM checkout.lead_detail ld
     JOIN config cf ON cf.utm_campaign = ld.campaign
-    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON ld.created_at >= periodo.d_ini AND ld.created_at < periodo.d_fim + INTERVAL '1 day'
     WHERE ld.source = 'google' AND ld.lead_accepted = true
     GROUP BY 1, 2
 ),
@@ -681,21 +681,21 @@ chat_start AS (
     SELECT m.partnership_id, c._timestamp::date AS dia, COUNT(*) AS conversas
     FROM whatsapp_assistant.wa_chat_start c
     JOIN label_map m ON m.agent_label = c.referral_agent_label
-    JOIN periodo ON c._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON c._timestamp >= periodo.d_ini AND c._timestamp < periodo.d_fim + INTERVAL '1 day'
     GROUP BY 1, 2
 ),
 zip_search AS (
     SELECT m.partnership_id, z._timestamp::date AS dia, COUNT(*) AS zip_search
     FROM whatsapp_assistant.wa_zip_search z
     JOIN label_map m ON m.agent_label = z.referral_agent_label
-    JOIN periodo ON z._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON z._timestamp >= periodo.d_ini AND z._timestamp < periodo.d_fim + INTERVAL '1 day'
     GROUP BY 1, 2
 ),
 redirects AS (
     SELECT m.partnership_id, r._timestamp::date AS dia, COUNT(*) AS redirects
     FROM whatsapp_assistant.wa_redirect r
     JOIN label_map m ON m.agent_label = r.referral_agent_label
-    JOIN periodo ON r._timestamp BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON r._timestamp >= periodo.d_ini AND r._timestamp < periodo.d_fim + INTERVAL '1 day'
     GROUP BY 1, 2
 ),
 leads_e_vendas AS (
@@ -707,7 +707,7 @@ leads_e_vendas AS (
         ON wcs.user_id = ld.user_id
        AND wcs._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
     JOIN label_map m ON m.agent_label = wcs.referral_agent_label
-    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    JOIN periodo ON ld.created_at >= periodo.d_ini AND ld.created_at < periodo.d_fim + INTERVAL '1 day'
     WHERE ld.source = 'whatsapp' AND ld.lead_accepted = true
     GROUP BY 1, 2
 ),

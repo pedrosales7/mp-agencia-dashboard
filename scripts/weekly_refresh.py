@@ -289,12 +289,18 @@ def main():
     dfm_sql = queries["DAILY_FUNNEL_META"].replace("{{CUTOFF}}", cutoff)
     fresh_dfm = [dict(r, dia=norm_date(r["dia"])) for r in run("DAILY_FUNNEL_META", dfm_sql)]
 
-    # FUNNEL_GOOGLE / FUNNEL_META — 4 janelas cada
+    # FUNNEL_GOOGLE / FUNNEL_META — 5 janelas: 7d/30d/90d/mês corrente + mês anterior
+    # Recomputar o mês anterior a cada refresh corrige o congelamento que deixava
+    # meses fechados com foto do dia da virada (leads sold em julho não voltavam
+    # ao snapshot de junho, cliques do Meta usavam a coluna antiga, etc).
+    prev_month_end_dt = cutoff_dt.replace(day=1) - timedelta(days=1)
+    prev_month_ini_dt = prev_month_end_dt.replace(day=1)
     windows = {
         "7d": ((cutoff_dt - timedelta(days=6)).isoformat(), cutoff),
         "30d": ((cutoff_dt - timedelta(days=29)).isoformat(), cutoff),
         "90d": ((cutoff_dt - timedelta(days=89)).isoformat(), cutoff),
         curr_month_key: (cutoff_dt.replace(day=1).isoformat(), cutoff),
+        prev_key: (prev_month_ini_dt.isoformat(), prev_month_end_dt.isoformat()),
     }
 
     fresh_fg_all, fresh_fm_all = [], []
@@ -352,6 +358,7 @@ def main():
         "30d": ((d - timedelta(days=30)).isoformat(), d.isoformat()),
         "90d": ((d - timedelta(days=90)).isoformat(), d.isoformat()),
         curr_month_key: (curr_month_ini, d.isoformat()),
+        prev_key: (prev_month_ini_dt.isoformat(), prev_month_end_dt.isoformat()),
         "7d_prev": ((d - timedelta(days=14)).isoformat(), (d - timedelta(days=8)).isoformat()),
         "30d_prev": ((d - timedelta(days=60)).isoformat(), (d - timedelta(days=31)).isoformat()),
         "90d_prev": ((d - timedelta(days=180)).isoformat(), (d - timedelta(days=91)).isoformat()),
@@ -365,15 +372,17 @@ def main():
     with open(HTML_PATH, "r", encoding="utf-8") as f:
         html = f.read()
 
+    # Excluir mês corrente E mês anterior das listas históricas para o fresh sobrescrever.
+    # Mês anterior é recomputado a cada refresh (fix congelamento — ver windows/periods_snap acima).
+    refreshed_keys = ROLLING_KEYS | {curr_month_key, prev_key}
     existing_snap = extract_js_array(html, "SNAPSHOT")
-    historical_snap = [r for r in existing_snap
-                        if r.get("period_key") not in ROLLING_KEYS and r.get("period_key") != curr_month_key]
+    historical_snap = [r for r in existing_snap if r.get("period_key") not in refreshed_keys]
     full_snapshot = historical_snap + snap_fresh
 
     existing_fg = extract_js_array(html, "FUNNEL_GOOGLE")
     existing_fm = extract_js_array(html, "FUNNEL_META")
-    hist_fg = [r for r in existing_fg if r.get("p_key") not in ROLLING_KEYS and r.get("p_key") != curr_month_key]
-    hist_fm = [r for r in existing_fm if r.get("p_key") not in ROLLING_KEYS and r.get("p_key") != curr_month_key]
+    hist_fg = [r for r in existing_fg if r.get("p_key") not in refreshed_keys]
+    hist_fm = [r for r in existing_fm if r.get("p_key") not in refreshed_keys]
     full_fg = hist_fg + fresh_fg_all
     full_fm = hist_fm + fresh_fm_all
 
@@ -453,9 +462,8 @@ def main():
     months[curr_month_key]["funnel_google"] = fresh_fg_month
     months[curr_month_key]["funnel_meta"] = fresh_fm_month
 
-    if prev_is_frozen and prev_key in months:
-        months[prev_key]["frozen"] = True
-        months[prev_key]["frozen_since"] = today.isoformat()
+    # Antes marcávamos o mês anterior como "frozen" aqui — agora ele é recomputado
+    # a cada refresh (ver windows/periods_snap), então não faz sentido travar.
     cache["months"] = months
 
     cache["partner_weekly"] = [r for r in all_weekly if r["semana"] >= prune_before_80]
