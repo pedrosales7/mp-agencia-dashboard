@@ -289,19 +289,31 @@ def main():
     dfm_sql = queries["DAILY_FUNNEL_META"].replace("{{CUTOFF}}", cutoff)
     fresh_dfm = [dict(r, dia=norm_date(r["dia"])) for r in run("DAILY_FUNNEL_META", dfm_sql)]
 
-    # FUNNEL_GOOGLE / FUNNEL_META — 5 janelas: 7d/30d/90d/mês corrente + mês anterior
-    # Recomputar o mês anterior a cada refresh corrige o congelamento que deixava
-    # meses fechados com foto do dia da virada (leads sold em julho não voltavam
-    # ao snapshot de junho, cliques do Meta usavam a coluna antiga, etc).
-    prev_month_end_dt = cutoff_dt.replace(day=1) - timedelta(days=1)
-    prev_month_ini_dt = prev_month_end_dt.replace(day=1)
+    # FUNNEL_GOOGLE / FUNNEL_META — 4 janelas rolling + todos os meses históricos
+    # já presentes no HTML. Recomputar tudo a cada refresh corrige o congelamento
+    # que deixava meses fechados com a foto do dia da virada (leads sold em julho
+    # não voltavam ao snapshot de junho, cliques usavam a coluna antiga, etc).
+    with open(HTML_PATH, "r", encoding="utf-8") as _f:
+        _html_for_keys = _f.read()
+    existing_month_keys = {
+        r.get("p_key") for r in extract_js_array(_html_for_keys, "FUNNEL_META") + extract_js_array(_html_for_keys, "FUNNEL_GOOGLE")
+        if isinstance(r.get("p_key"), str) and re.fullmatch(r"\d{4}-\d{2}", r["p_key"])
+    }
+    existing_month_keys.add(prev_key)  # sempre inclui o mês anterior mesmo em HTML ainda sem dados
     windows = {
         "7d": ((cutoff_dt - timedelta(days=6)).isoformat(), cutoff),
         "30d": ((cutoff_dt - timedelta(days=29)).isoformat(), cutoff),
         "90d": ((cutoff_dt - timedelta(days=89)).isoformat(), cutoff),
         curr_month_key: (cutoff_dt.replace(day=1).isoformat(), cutoff),
-        prev_key: (prev_month_ini_dt.isoformat(), prev_month_end_dt.isoformat()),
     }
+    for mk in sorted(existing_month_keys):
+        if mk == curr_month_key:
+            continue
+        m_ini = date(int(mk[:4]), int(mk[5:]), 1)
+        # último dia do mês: primeiro dia do mês seguinte - 1
+        next_m = date(m_ini.year + (1 if m_ini.month == 12 else 0), 1 if m_ini.month == 12 else m_ini.month + 1, 1)
+        m_fim = next_m - timedelta(days=1)
+        windows[mk] = (m_ini.isoformat(), m_fim.isoformat())
 
     fresh_fg_all, fresh_fm_all = [], []
     for pkey, (d_ini, d_fim) in windows.items():
@@ -358,11 +370,16 @@ def main():
         "30d": ((d - timedelta(days=30)).isoformat(), d.isoformat()),
         "90d": ((d - timedelta(days=90)).isoformat(), d.isoformat()),
         curr_month_key: (curr_month_ini, d.isoformat()),
-        prev_key: (prev_month_ini_dt.isoformat(), prev_month_end_dt.isoformat()),
         "7d_prev": ((d - timedelta(days=14)).isoformat(), (d - timedelta(days=8)).isoformat()),
         "30d_prev": ((d - timedelta(days=60)).isoformat(), (d - timedelta(days=31)).isoformat()),
         "90d_prev": ((d - timedelta(days=180)).isoformat(), (d - timedelta(days=91)).isoformat()),
     }
+    # Recomputar também todos os meses fechados presentes no HTML (mesma motivação
+    # descrita em `windows` acima — não deixar mês antigo com foto do dia da virada).
+    for mk, (m_ini, m_fim) in windows.items():
+        if mk in periods_snap or not re.fullmatch(r"\d{4}-\d{2}", mk):
+            continue
+        periods_snap[mk] = (m_ini, m_fim)
     prev_keys = {"7d_prev", "30d_prev", "90d_prev"}
     snap_fresh, prev_snap = [], []
     for pkey, (d_ini, d_fim) in periods_snap.items():
@@ -372,9 +389,10 @@ def main():
     with open(HTML_PATH, "r", encoding="utf-8") as f:
         html = f.read()
 
-    # Excluir mês corrente E mês anterior das listas históricas para o fresh sobrescrever.
-    # Mês anterior é recomputado a cada refresh (fix congelamento — ver windows/periods_snap acima).
-    refreshed_keys = ROLLING_KEYS | {curr_month_key, prev_key}
+    # Excluir das listas históricas todas as chaves que foram recomputadas neste
+    # refresh (rolling + mês corrente + todos os meses fechados de `windows`), para
+    # o fresh sobrescrever. Ver comentário em `windows` sobre o fix de congelamento.
+    refreshed_keys = ROLLING_KEYS | set(windows.keys())
     existing_snap = extract_js_array(html, "SNAPSHOT")
     historical_snap = [r for r in existing_snap if r.get("period_key") not in refreshed_keys]
     full_snapshot = historical_snap + snap_fresh
