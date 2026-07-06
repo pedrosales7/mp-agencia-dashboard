@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # necessário pro step final chamar `gh run rerun` no pages-build-deployment quando ele falhar transiente
 
 jobs:
   refresh:
@@ -40,9 +41,73 @@ jobs:
         run: python scripts/weekly_refresh.py
 
       - name: Commit updated dashboard
+        id: commit
         run: |
           git config user.name "mp-agencia-bot"
           git config user.email "actions@github.com"
           git add docs/index.html data/cache/historical_data.json
-          git diff --cached --quiet || git commit -m "Refresh dashboard $(date -u +%F)"
+          if git diff --cached --quiet; then
+            echo "no_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Nada a commitar."
+            exit 0
+          fi
+          git commit -m "Refresh dashboard $(date -u +%F)"
           git push
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      # Aguarda o pages-build-deployment disparado pelo push acima e reroda uma vez
+      # se ele falhar. A falha típica é "Deployment failed, try again later." —
+      # erro transiente da infra do GitHub Pages, não do nosso código. Sem esse step,
+      # uma falha às 09h de segunda deixa o dashboard desatualizado até alguém notar.
+      - name: Ensure Pages deployment succeeded (with one retry)
+        if: steps.commit.outputs.no_changes != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ steps.commit.outputs.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          echo "Procurando pages-build-deployment para $SHA…"
+          RUN_ID=""
+          for i in $(seq 1 30); do
+            RUN_ID=$(gh api "/repos/$REPO/actions/runs?head_sha=$SHA&per_page=30" \
+              --jq '[.workflow_runs[] | select(.name=="pages build and deployment") | .id] | first // empty')
+            if [ -n "$RUN_ID" ]; then break; fi
+            sleep 10
+          done
+          if [ -z "$RUN_ID" ]; then
+            echo "::warning::Nenhum pages-build-deployment achado para $SHA em 5min; encerrando sem retry."
+            exit 0
+          fi
+          echo "Acompanhando run $RUN_ID"
+
+          wait_for_completion() {
+            for _ in $(seq 1 60); do
+              STATUS=$(gh api "/repos/$REPO/actions/runs/$RUN_ID" --jq '.status')
+              if [ "$STATUS" = "completed" ]; then
+                gh api "/repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion'
+                return 0
+              fi
+              sleep 10
+            done
+            echo "timeout"
+          }
+
+          CONCLUSION=$(wait_for_completion)
+          if [ "$CONCLUSION" = "success" ]; then
+            echo "Pages deploy ok na primeira tentativa."
+            exit 0
+          fi
+
+          echo "::warning::Pages deploy terminou com '$CONCLUSION'. Rerodando uma vez."
+          gh run rerun "$RUN_ID" --failed --repo "$REPO"
+          sleep 5
+
+          CONCLUSION=$(wait_for_completion)
+          if [ "$CONCLUSION" = "success" ]; then
+            echo "Pages deploy ok no retry."
+            exit 0
+          fi
+          echo "::error::Pages deploy falhou de novo após retry ('$CONCLUSION'). Investigar em github.com/$REPO/actions/runs/$RUN_ID"
+          exit 1
