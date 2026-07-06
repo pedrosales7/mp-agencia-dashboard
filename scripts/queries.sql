@@ -317,15 +317,37 @@ redirects AS (
     JOIN periodo ON r._timestamp >= periodo.d_ini + INTERVAL '3 hours' AND r._timestamp < periodo.d_fim + INTERVAL '1 day' + INTERVAL '3 hours'
     GROUP BY 1
 ),
+-- CHANGELOG 2026-07-06: `leads_e_vendas` reescrito. Duas correções:
+--   (A) dedup de vendas: antes era SUM(CASE WHEN sold), que contava 1x por linha
+--       do JOIN com wa_chat_start — leads com N chat_starts na janela de 7 dias
+--       inflavam N vendas. Agora COUNT(DISTINCT CASE WHEN sold THEN ld.id END).
+--   (B) atribuição por partner_id_partner (não mais referral_agent_label). Antes,
+--       leads Meta que não passaram pelo bot com um label conhecido sumiam do
+--       total (Loga fev/mar perdia ~11 leads/mês). Agora usa partner_id_partner
+--       direto, com aliases:
+--         - 'enove-solucoes'          → 'enove-fibra' (padrão já usado no SNAPSHOT)
+--         - 'americanet' + chat_start
+--           com label 'mpa.unifique'  → 'unifique'   (padrão cashback: leads da
+--                                                     campanha Unifique são atribuídos
+--                                                     no CRM à Americanet)
+-- As demais CTEs (chat_start, zip_search, get_plans, redirects) continuam
+-- atribuindo por label — intencional: as etapas do funil respondem "quem passou
+-- por essa etapa do bot", enquanto leads/vendas respondem "quem foi atribuído
+-- no CRM". As duas atribuições convivem por design.
 leads_e_vendas AS (
-    SELECT m.partnership_id,
-           COUNT(DISTINCT ld.id) AS leads,
-           SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
+    SELECT
+        CASE
+            WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra'
+            WHEN ld.partner_id_partner = 'americanet' AND wcs_unif.user_id IS NOT NULL THEN 'unifique'
+            ELSE ld.partner_id_partner
+        END AS id_mp_canon,
+        COUNT(DISTINCT ld.id) AS leads,
+        COUNT(DISTINCT CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN ld.id END) AS vendas
     FROM checkout.lead_detail ld
-    JOIN whatsapp_assistant.wa_chat_start wcs
-        ON wcs.user_id = ld.user_id
-       AND wcs._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
-    JOIN label_map m ON m.agent_label = wcs.referral_agent_label
+    LEFT JOIN whatsapp_assistant.wa_chat_start wcs_unif
+        ON wcs_unif.user_id = ld.user_id
+       AND wcs_unif._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
+       AND wcs_unif.referral_agent_label = 'mpa.unifique'
     JOIN periodo ON ld.created_at >= periodo.d_ini + INTERVAL '3 hours' AND ld.created_at < periodo.d_fim + INTERVAL '1 day' + INTERVAL '3 hours'
     WHERE ld.source = 'whatsapp' AND ld.lead_accepted = true
     GROUP BY 1
@@ -347,7 +369,7 @@ LEFT JOIN chat_start         cs ON cs.partnership_id = base.partnership_id
 LEFT JOIN zip_search         zs ON zs.partnership_id = base.partnership_id
 LEFT JOIN get_plans          gp ON gp.partnership_id = base.partnership_id
 LEFT JOIN redirects          r  ON r.partnership_id  = base.partnership_id
-LEFT JOIN leads_e_vendas     lv ON lv.partnership_id = base.partnership_id
+LEFT JOIN leads_e_vendas     lv ON lv.id_mp_canon = base.id_mp_canon
 ORDER BY ip.invest DESC NULLS LAST;
 -- [/QUERY:FUNNEL_META]
 
@@ -700,30 +722,43 @@ redirects AS (
     JOIN periodo ON r._timestamp >= periodo.d_ini + INTERVAL '3 hours' AND r._timestamp < periodo.d_fim + INTERVAL '1 day' + INTERVAL '3 hours'
     GROUP BY 1, 2
 ),
+-- CHANGELOG 2026-07-06: `leads_e_vendas` reescrito (mesmas correções A e B
+-- descritas na FUNNEL_META acima: dedup por lead + atribuição via partner_id_partner
+-- com aliases Enove e Unifique). Consequência: leads_e_vendas passa a ser indexado
+-- por (dia, id_mp_canon), enquanto as demais CTEs continuam por (dia, partnership_id).
+-- days_partners e o SELECT final foram reorganizados pra unir os dois eixos via
+-- `base` (que tem 1 linha por (id_mp_canon, partnership_id)).
 leads_e_vendas AS (
-    SELECT m.partnership_id, (ld.created_at - INTERVAL '3 hours')::date AS dia,
-           COUNT(DISTINCT ld.id) AS leads,
-           SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
+    SELECT
+        CASE
+            WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra'
+            WHEN ld.partner_id_partner = 'americanet' AND wcs_unif.user_id IS NOT NULL THEN 'unifique'
+            ELSE ld.partner_id_partner
+        END AS id_mp_canon,
+        (ld.created_at - INTERVAL '3 hours')::date AS dia,
+        COUNT(DISTINCT ld.id) AS leads,
+        COUNT(DISTINCT CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN ld.id END) AS vendas
     FROM checkout.lead_detail ld
-    JOIN whatsapp_assistant.wa_chat_start wcs
-        ON wcs.user_id = ld.user_id
-       AND wcs._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
-    JOIN label_map m ON m.agent_label = wcs.referral_agent_label
+    LEFT JOIN whatsapp_assistant.wa_chat_start wcs_unif
+        ON wcs_unif.user_id = ld.user_id
+       AND wcs_unif._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
+       AND wcs_unif.referral_agent_label = 'mpa.unifique'
     JOIN periodo ON ld.created_at >= periodo.d_ini + INTERVAL '3 hours' AND ld.created_at < periodo.d_fim + INTERVAL '1 day' + INTERVAL '3 hours'
     WHERE ld.source = 'whatsapp' AND ld.lead_accepted = true
     GROUP BY 1, 2
 ),
 base AS (SELECT DISTINCT id_mp_canon, partnership_id FROM label_map),
 days_partners AS (
-    SELECT DISTINCT dia, partnership_id FROM (
-        SELECT dia, partnership_id FROM clicks
-        UNION SELECT dia, partnership_id FROM chat_start
-        UNION SELECT dia, partnership_id FROM zip_search
-        UNION SELECT dia, partnership_id FROM redirects
-        UNION SELECT dia, partnership_id FROM leads_e_vendas
+    SELECT DISTINCT dia, id_mp_canon FROM (
+        SELECT c.dia, b.id_mp_canon FROM clicks c     JOIN base b ON b.partnership_id = c.partnership_id
+        UNION SELECT cs.dia, b.id_mp_canon FROM chat_start cs JOIN base b ON b.partnership_id = cs.partnership_id
+        UNION SELECT z.dia, b.id_mp_canon FROM zip_search z   JOIN base b ON b.partnership_id = z.partnership_id
+        UNION SELECT r.dia, b.id_mp_canon FROM redirects r    JOIN base b ON b.partnership_id = r.partnership_id
+        UNION SELECT dia, id_mp_canon FROM leads_e_vendas
     ) u
+    WHERE id_mp_canon IS NOT NULL
 )
-SELECT dp.dia, b.id_mp_canon AS id_mp,
+SELECT dp.dia, dp.id_mp_canon AS id_mp,
        COALESCE(cl.cliques,0) AS cliques,
        COALESCE(cs.conversas,0) AS chat_start,
        COALESCE(zs.zip_search,0) AS zip_search,
@@ -731,11 +766,11 @@ SELECT dp.dia, b.id_mp_canon AS id_mp,
        COALESCE(lv.leads,0) AS leads,
        COALESCE(lv.vendas,0) AS vendas
 FROM days_partners dp
-JOIN base b ON b.partnership_id = dp.partnership_id
-LEFT JOIN clicks cl ON cl.partnership_id = dp.partnership_id AND cl.dia = dp.dia
-LEFT JOIN chat_start cs ON cs.partnership_id = dp.partnership_id AND cs.dia = dp.dia
-LEFT JOIN zip_search zs ON zs.partnership_id = dp.partnership_id AND zs.dia = dp.dia
-LEFT JOIN redirects r ON r.partnership_id = dp.partnership_id AND r.dia = dp.dia
-LEFT JOIN leads_e_vendas lv ON lv.partnership_id = dp.partnership_id AND lv.dia = dp.dia
+LEFT JOIN base b ON b.id_mp_canon = dp.id_mp_canon
+LEFT JOIN clicks cl ON cl.partnership_id = b.partnership_id AND cl.dia = dp.dia
+LEFT JOIN chat_start cs ON cs.partnership_id = b.partnership_id AND cs.dia = dp.dia
+LEFT JOIN zip_search zs ON zs.partnership_id = b.partnership_id AND zs.dia = dp.dia
+LEFT JOIN redirects r ON r.partnership_id = b.partnership_id AND r.dia = dp.dia
+LEFT JOIN leads_e_vendas lv ON lv.id_mp_canon = dp.id_mp_canon AND lv.dia = dp.dia
 ORDER BY 1, 2;
 -- [/QUERY:DAILY_FUNNEL_META]
