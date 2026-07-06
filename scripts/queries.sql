@@ -232,17 +232,19 @@ ORDER BY cl.cliques DESC NULLS LAST;
 -- PRECISA rodar 4x por refresh (janelas 7d/30d/90d/mês corrente), não
 -- só pro mês corrente. Ver nota completa na query FUNNEL_GOOGLE acima.
 --
--- CHANGELOG 2026-07-03: troca de `clicks` pra `unique_clicks` na CTE
--- `clicks`. Causa raiz do bug "cliques do dashboard muito acima do
--- Looker" (Pedro): `clicks` é cliques totais do Meta (inclui curtida/
--- comentário/compartilhamento, não só clique no link) — inflava o
--- número sempre pra cima, com razão variável por campanha. `unique_clicks`
--- aproxima melhor o que o Looker mostra, mas não bate 100%: métricas
--- "únicas" do Meta deduplicam só dentro do dia, então somar linhas
--- diárias ainda pode contar 2x quem clicou em dias diferentes do mesmo
--- mês (o Looker pede o mês inteiro numa chamada só, dedup real). Sem
--- solução trivial pra paridade exata — ver outputs/mp-data-context/
--- references/gotchas.md.
+-- CHANGELOG 2026-07-06: troca de `unique_clicks` pra `link_click_unique`
+-- na CTE `clicks`. Métrica de referência do Pedro é "cliques no link
+-- únicos" do Meta Ads Manager (cliques que efetivamente saíram do anúncio
+-- pro destino, sem contar reação/like/comentário). `unique_clicks` cobria
+-- qualquer clique único (incluindo interações no post), inflava o número.
+-- Nota herdada da versão anterior: dedup do Meta é intraday, então somar
+-- linhas diárias ainda pode contar 2x quem clicou em dias distintos do
+-- mesmo mês — o Ads Manager, em contraste, pede o intervalo inteiro numa
+-- chamada só e faz dedup real. Sem solução trivial pra paridade exata.
+--
+-- CHANGELOG 2026-07-03 (superseded): `clicks` → `unique_clicks`. Migrado
+-- pra link_click_unique acima; nota preservada como histórico do bug de
+-- "cliques do dashboard muito acima do Looker" (Pedro).
 -- ============================================================
 -- [QUERY:FUNNEL_META]
 WITH periodo AS (
@@ -256,7 +258,7 @@ campaign_config AS (
     WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
 ),
 clicks AS (
-    SELECT cf.partnership_id, SUM(f.unique_clicks) AS cliques
+    SELECT cf.partnership_id, SUM(f.link_click_unique) AS cliques
     FROM ads.facebook_ads_daily_data f
     JOIN campaign_config cf ON cf.campaign_name = f.campaign_name
     JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
@@ -422,8 +424,8 @@ cliques_g AS (
     GROUP BY 1, 2
 ),
 cliques_m AS (
-    -- CHANGELOG 2026-07-03: `clicks` -> `unique_clicks`, mesma correção da FUNNEL_META acima.
-    SELECT DATE_TRUNC('week', f.date::date)::date AS semana, p.id_mp, SUM(f.unique_clicks) AS cliques_m
+    -- CHANGELOG 2026-07-06: `unique_clicks` -> `link_click_unique` (pareia com o "cliques no link únicos" do Meta Ads Manager, que é a métrica de referência do Pedro).
+    SELECT DATE_TRUNC('week', f.date::date)::date AS semana, p.id_mp, SUM(f.link_click_unique) AS cliques_m
     FROM ads.facebook_ads_daily_data f
     JOIN config_m cf ON cf.campaign_name = f.campaign_name
     JOIN pid p ON p.partnership_id = cf.partnership_id
@@ -657,7 +659,7 @@ campaign_config AS (
     WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
 ),
 clicks AS (
-    SELECT cf.partnership_id, f.date::date AS dia, SUM(f.unique_clicks) AS cliques
+    SELECT cf.partnership_id, f.date::date AS dia, SUM(f.link_click_unique) AS cliques
     FROM ads.facebook_ads_daily_data f
     JOIN campaign_config cf ON cf.campaign_name = f.campaign_name
     JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
