@@ -95,6 +95,22 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .tip-content hr { border: 0; border-top: 1px solid #3f3f46; margin: 8px 0; }
 @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 640px)  { .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+/* Evolução das taxas de conversão */
+.taxas-channel { margin-bottom: 18px; }
+.taxas-channel:last-child { margin-bottom: 0; }
+.taxas-channel h4 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 12px 0 6px; }
+.taxas-channel h4::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; vertical-align: 1px; margin-right: 6px; }
+.taxas-channel.google h4::before { background: var(--google); }
+.taxas-channel.meta   h4::before { background: var(--meta); }
+.taxas-stage { font-weight: 500; white-space: nowrap; }
+.taxas-stage .sub { color: var(--muted); font-weight: 400; }
+.taxas-spark { padding-left: 12px; }
+.taxas-spark svg { display: block; margin-left: auto; color: var(--text); }
+.taxas-delta { font-size: 11.5px; font-weight: 500; padding: 2px 6px; border-radius: 4px; font-variant-numeric: tabular-nums; display: inline-block; }
+.taxas-delta.up   { color: var(--success); background: #dcfce7; }
+.taxas-delta.down { color: var(--danger);  background: #fee2e2; }
+.taxas-delta.flat { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -195,6 +211,18 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   <div class="note">* Leads produtivos: <code>source</code> em google/whatsapp e <code>lead_accepted=true</code>.</div>
 </div>
 
+<div class="section" id="taxas-section">
+  <div class="section-header">
+    <h2>Evolução das taxas de conversão<span class="tip">i<span class="tip-content"><strong>Aparece quando você seleciona um partner específico</strong> no filtro.<br><br>Cada linha é uma <strong>etapa do funil</strong>, cada coluna é um período. A última coluna mostra a <strong>trajetória compacta</strong> (sparkline) e a <strong>variação em pontos percentuais</strong> vs. o período anterior.<br><br><strong>Google:</strong><ul><li>Clique → Sessão</li><li>Sessão → Clickoff</li><li>Clickoff → Redirect</li><li>Redirect → Lead</li><li>Lead → Venda</li></ul><strong>Meta:</strong><ul><li>Clique → Chat start</li><li>Chat start → Zip search</li><li>Zip search → Redirect</li><li>Redirect → Lead</li><li>Lead → Venda</li></ul>Fonte: mesmos eventos do "Funil completo" acima, agregados por semana/mês.<br><br>Quando o <strong>denominador é menor que 5</strong>, a célula mostra "—" para não induzir a erro com base pequena (ex.: 1 venda sobre 2 leads não é uma taxa de 50% confiável).</span></span></h2>
+    <div class="btn-group" id="taxas-gran">
+      <button data-gran="monthly">Mensal</button>
+      <button data-gran="weekly" aria-pressed="true">Semanal</button>
+    </div>
+  </div>
+  <div class="table-wrap" id="taxas-table"></div>
+  <div class="note">Cor do delta: verde = taxa subiu, vermelho = caiu. Ponto final da sparkline pinta na mesma lógica.</div>
+</div>
+
 <div class="section">
   <h2>Detalhamento investimento × leads × vendas<span class="tip">i<span class="tip-content"><strong>Consolidado por partner</strong> (soma Google + Meta quando filtro Canal = Todos).<br><br>Mesmos filtros das tabelas de funil acima:<ul><li>Lead: <code>source IN ('google','whatsapp')</code>, <code>lead_accepted = true</code></li><li>Venda: <code>current_situation IN ('sold','installed','scheduled')</code></li><li>Investimento: <code>raw_investment</code>, <code>cashback</code> e <code>partnership_net_daily_spend</code> de <code>performance_partner_mp_agency</code></li></ul><strong>Atribuição do lead:</strong> em 7d/30d/90d/mês, por campanha/chat (igual Funil completo); em período customizado, direto por <code>partner_id_partner</code>. Os dois podem divergir levemente pro mesmo partner/período.<br><br>CPL e CAC sobre líquido.<hr><strong>Alerta visual</strong> na Taxa Lead→Venda e no CAC: fundo vermelho se &lt;50% (ou &gt;200% pro CAC) da mediana; verde no oposto. Só partners com Leads ≥ 3 entram na comparação.<hr>Linhas em amarelo (linha inteira): partner com bruto &gt; 0 mas leads = 0.</span></span></h2>
   <div id="table-container" class="table-wrap"></div>
@@ -249,7 +277,8 @@ let state = {
   customStart: localStorage.getItem(LS_CUSTOM_START) || '',
   customEnd:   localStorage.getItem(LS_CUSTOM_END)   || '',
   compare: localStorage.getItem(LS_COMPARE) === '1',
-  progGran: localStorage.getItem('mpa_prog_gran') || 'monthly',
+  progGran:  localStorage.getItem('mpa_prog_gran')  || 'monthly',
+  taxasGran: localStorage.getItem('mpa_taxas_gran') || 'weekly',
   sortKey: 'liquido',
   sortDir: 'desc',
   sortGoogle: { key: 'cliques', dir: 'desc' },
@@ -1050,6 +1079,7 @@ function render() {
   renderFunnelMeta();
   renderCoverage();
   renderProgressao();
+  renderTaxas();
   renderDetailTable();
   if (typeof Chart !== 'undefined') renderChartTime();
 }
@@ -1142,6 +1172,164 @@ function renderProgressao() {
     html += renderProgressaoTableFor(id_mp);
   }
   document.getElementById('progressao-table').innerHTML = html;
+}
+
+// ─────────── Evolução das taxas de conversão ───────────
+// Denominador mínimo pra exibir uma taxa. Base menor esconde a taxa como "—"
+// pra não induzir a erro (ex.: 1 venda sobre 2 leads = 50% enganoso).
+const TAXAS_MIN_DENOM = 5;
+
+function taxasWeekStart(diaIso) {
+  // ISO week starting Monday, no timezone drift.
+  const [y, m, d] = diaIso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=Sun..6=Sat
+  const diff = dow === 0 ? -6 : 1 - dow;
+  dt.setUTCDate(dt.getUTCDate() + diff);
+  return dt.toISOString().slice(0, 10);
+}
+function buildTaxasWeekly(id_mp) {
+  const idx = DS_PARTNERS.indexOf(id_mp);
+  if (idx < 0) return [];
+  const buckets = new Map();
+  for (const r of DAILY_FUNNEL) {
+    if (r[1] !== idx) continue;
+    const ws = taxasWeekStart(r[0]);
+    let b = buckets.get(ws);
+    if (!b) {
+      b = { key: ws, days: new Set(),
+                       cliques_g:0, sessoes_g:0, clickoff_g:0, redirect_g:0, leads_g:0, vendas_g:0,
+                       cliques_m:0, chat_start_m:0, zip_search_m:0, redirect_m:0, leads_m:0, vendas_m:0 };
+      buckets.set(ws, b);
+    }
+    b.days.add(r[0]);
+    b.cliques_g += r[2]||0;  b.sessoes_g += r[3]||0;  b.clickoff_g += r[4]||0; b.redirect_g += r[5]||0;
+    b.leads_g   += r[6]||0;  b.vendas_g  += r[7]||0;
+    b.cliques_m += r[8]||0;  b.chat_start_m += r[9]||0; b.zip_search_m += r[10]||0; b.redirect_m += r[11]||0;
+    b.leads_m   += r[12]||0; b.vendas_m  += r[13]||0;
+  }
+  // Descarta semana parcial (< 5 dias de dados) — acontece quando o refresh cai numa
+  // segunda cedo e o snapshot inclui só 1-2 dias da semana corrente.
+  const rows = Array.from(buckets.values())
+    .filter(b => b.days.size >= 5)
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .slice(-8);
+  for (const r of rows) r.label = r.key.slice(5).split('-').reverse().join('/');
+  return rows;
+}
+function buildTaxasMonthly(id_mp) {
+  const idx = DS_PARTNERS.indexOf(id_mp);
+  if (idx < 0) return [];
+  const currMonth = SNAPSHOT_ISO.slice(0, 7);
+  const buckets = new Map();
+  for (const r of DAILY_FUNNEL) {
+    if (r[1] !== idx) continue;
+    const ym = r[0].slice(0, 7);
+    if (ym === currMonth) continue; // esconde mês corrente (parcial)
+    let b = buckets.get(ym);
+    if (!b) {
+      b = { key: ym, cliques_g:0, sessoes_g:0, clickoff_g:0, redirect_g:0, leads_g:0, vendas_g:0,
+                       cliques_m:0, chat_start_m:0, zip_search_m:0, redirect_m:0, leads_m:0, vendas_m:0 };
+      buckets.set(ym, b);
+    }
+    b.cliques_g += r[2]||0;  b.sessoes_g += r[3]||0;  b.clickoff_g += r[4]||0; b.redirect_g += r[5]||0;
+    b.leads_g   += r[6]||0;  b.vendas_g  += r[7]||0;
+    b.cliques_m += r[8]||0;  b.chat_start_m += r[9]||0; b.zip_search_m += r[10]||0; b.redirect_m += r[11]||0;
+    b.leads_m   += r[12]||0; b.vendas_m  += r[13]||0;
+  }
+  const rows = Array.from(buckets.values()).sort((a, b) => a.key.localeCompare(b.key)).slice(-5);
+  const mm = {'01':'jan','02':'fev','03':'mar','04':'abr','05':'mai','06':'jun','07':'jul','08':'ago','09':'set','10':'out','11':'nov','12':'dez'};
+  for (const r of rows) r.label = mm[r.key.slice(5)] + '/' + r.key.slice(2, 4);
+  return rows;
+}
+function taxaValue(num, den) {
+  if (!den || den < TAXAS_MIN_DENOM) return null;
+  return num / den;
+}
+function taxasSparkline(values) {
+  const w = 62, h = 22, pad = 3;
+  const valid = values.filter(v => v != null);
+  if (valid.length < 2) return `<svg width="${w}" height="${h}"></svg>`;
+  const min = Math.min(...valid), max = Math.max(...valid);
+  const range = max - min || 1;
+  const stepX = (w - 2 * pad) / (values.length - 1);
+  const pts = values.map((v, i) => v == null ? null : {
+    x: pad + i * stepX,
+    y: h - pad - ((v - min) / range) * (h - 2 * pad),
+  });
+  let path = '', started = false;
+  for (const p of pts) {
+    if (!p) { started = false; continue; }
+    path += (started ? ' L' : 'M') + p.x.toFixed(1) + ',' + p.y.toFixed(1);
+    started = true;
+  }
+  const last = pts[pts.length - 1];
+  let prev = null;
+  for (let i = pts.length - 2; i >= 0; i--) { if (pts[i]) { prev = pts[i]; break; } }
+  let dotColor = 'currentColor';
+  if (last && prev) {
+    if (last.y < prev.y - 0.5) dotColor = 'var(--success)';
+    else if (last.y > prev.y + 0.5) dotColor = 'var(--danger)';
+  }
+  const dot = last ? `<circle cx="${last.x.toFixed(1)}" cy="${last.y.toFixed(1)}" r="2.2" fill="${dotColor}"/>` : '';
+  return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" fill="none"><path d="${path}" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>${dot}</svg>`;
+}
+function taxasDelta(cur, prev) {
+  if (cur == null || prev == null) return '<span class="taxas-delta flat">—</span>';
+  const diff = (cur - prev) * 100;
+  if (Math.abs(diff) < 0.05) return '<span class="taxas-delta flat">0,0 pp</span>';
+  const cls = diff > 0 ? 'up' : 'down';
+  const sign = diff > 0 ? '+' : '−';
+  return `<span class="taxas-delta ${cls}">${sign}${Math.abs(diff).toFixed(1)} pp</span>`;
+}
+function renderTaxasBlock(rows, stages) {
+  if (!rows.length) return '<div class="note">Sem dados no período.</div>';
+  const series = stages.map(s => rows.map(r => taxaValue(r[s.numKey], r[s.denKey])));
+  let html = '<table><thead><tr><th>Etapa</th>';
+  for (const r of rows) html += `<th class="num-h">${r.label}</th>`;
+  html += '<th class="num-h">Trajetória</th><th class="num-h">Δ ' + (state.taxasGran === 'weekly' ? 'sem.' : 'mês') + '</th></tr></thead><tbody>';
+  stages.forEach((s, si) => {
+    const vals = series[si];
+    html += `<tr><td class="taxas-stage">${s.from} <span class="sub">→ ${s.to}</span></td>`;
+    for (const v of vals) html += `<td class="num">${v == null ? '—' : (v * 100).toFixed(1) + '%'}</td>`;
+    html += `<td class="num taxas-spark">${taxasSparkline(vals)}</td>`;
+    html += `<td class="num">${taxasDelta(vals[vals.length - 1], vals[vals.length - 2])}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+const TAXAS_STAGES_G = [
+  { from: 'Clique',   to: 'Sessão',   numKey: 'sessoes_g',  denKey: 'cliques_g'  },
+  { from: 'Sessão',   to: 'Clickoff', numKey: 'clickoff_g', denKey: 'sessoes_g'  },
+  { from: 'Clickoff', to: 'Redirect', numKey: 'redirect_g', denKey: 'clickoff_g' },
+  { from: 'Redirect', to: 'Lead',     numKey: 'leads_g',    denKey: 'redirect_g' },
+  { from: 'Lead',     to: 'Venda',    numKey: 'vendas_g',   denKey: 'leads_g'    },
+];
+const TAXAS_STAGES_M = [
+  { from: 'Clique',     to: 'Chat start',  numKey: 'chat_start_m', denKey: 'cliques_m'    },
+  { from: 'Chat start', to: 'Zip search',  numKey: 'zip_search_m', denKey: 'chat_start_m' },
+  { from: 'Zip search', to: 'Redirect',    numKey: 'redirect_m',   denKey: 'zip_search_m' },
+  { from: 'Redirect',   to: 'Lead',        numKey: 'leads_m',      denKey: 'redirect_m'   },
+  { from: 'Lead',       to: 'Venda',       numKey: 'vendas_m',     denKey: 'leads_m'      },
+];
+function renderTaxasTableFor(id_mp) {
+  const rows = state.taxasGran === 'weekly' ? buildTaxasWeekly(id_mp) : buildTaxasMonthly(id_mp);
+  return '<div class="taxas-channel google"><h4>Google</h4>' + renderTaxasBlock(rows, TAXAS_STAGES_G) + '</div>'
+       + '<div class="taxas-channel meta"><h4>Meta</h4>'    + renderTaxasBlock(rows, TAXAS_STAGES_M) + '</div>';
+}
+function renderTaxas() {
+  document.getElementById('taxas-section').style.display = '';
+  if (state.partners.length === 0) {
+    document.getElementById('taxas-table').innerHTML = '<div class="note" style="padding:24px;text-align:center;font-style:normal;">↑ Selecione 1 ou mais <strong>Partners</strong> no filtro do topo pra ver a evolução das taxas de conversão.</div>';
+    return;
+  }
+  let html = '';
+  for (const id_mp of state.partners) {
+    html += `<h3 style="font-size:14px;font-weight:600;margin:${html ? '24px' : '0'} 0 8px;">${id_mp}</h3>`;
+    html += renderTaxasTableFor(id_mp);
+  }
+  document.getElementById('taxas-table').innerHTML = html;
 }
 
 function wireFilters() {
@@ -1243,6 +1431,15 @@ function wireFilters() {
       renderProgressao();
     });
   });
+  document.querySelectorAll('#taxas-gran button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#taxas-gran button').forEach(x => x.removeAttribute('aria-pressed'));
+      b.setAttribute('aria-pressed', 'true');
+      state.taxasGran = b.dataset.gran;
+      localStorage.setItem('mpa_taxas_gran', state.taxasGran);
+      renderTaxas();
+    });
+  });
   document.getElementById('compare-toggle').addEventListener('click', (e) => {
     state.compare = !state.compare;
     localStorage.setItem(LS_COMPARE, state.compare ? '1' : '0');
@@ -1280,6 +1477,10 @@ function applyStoredSelections() {
   document.querySelectorAll('#progressao-gran button').forEach(b => {
     b.removeAttribute('aria-pressed');
     if (b.dataset.gran === state.progGran) b.setAttribute('aria-pressed', 'true');
+  });
+  document.querySelectorAll('#taxas-gran button').forEach(b => {
+    b.removeAttribute('aria-pressed');
+    if (b.dataset.gran === state.taxasGran) b.setAttribute('aria-pressed', 'true');
   });
 }
 
