@@ -275,7 +275,8 @@ label_map AS (
         SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
         SELECT 'mpa.unifique',                                          'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                               UNION ALL
         SELECT 'mpa.ultranet-network@ultranet-network',                 '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                       UNION ALL
-        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'                           UNION ALL
+        SELECT 'mpa.ativa-telecom@ativa-telecom',                       '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
     ) x
 ),
 base AS (SELECT DISTINCT id_mp_canon, partnership_id FROM label_map),
@@ -434,7 +435,8 @@ label_map AS (
         SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
         SELECT 'mpa.unifique',                                          'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                               UNION ALL
         SELECT 'mpa.ultranet-network@ultranet-network',                 '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                       UNION ALL
-        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'                           UNION ALL
+        SELECT 'mpa.ativa-telecom@ativa-telecom',                       '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
     ) x
 ),
 cliques_g AS (
@@ -698,7 +700,8 @@ label_map AS (
         SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
         SELECT 'mpa.unifique',                                          'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                               UNION ALL
         SELECT 'mpa.ultranet-network@ultranet-network',                 '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                       UNION ALL
-        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'                           UNION ALL
+        SELECT 'mpa.ativa-telecom@ativa-telecom',                       '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
     ) x
 ),
 chat_start AS (
