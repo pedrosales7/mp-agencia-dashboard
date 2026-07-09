@@ -131,10 +131,14 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
 
 # ── prompt ────────────────────────────────────────────────────────────────
 
-PROMPT_TEMPLATE = """Você é um analista sênior de mídia paga especializado em performance para \
-provedores regionais de internet (ISPs). Você produz o relatório semanal de campanhas do MP Agência \
-para a EQUIPE DE MÍDIA — pessoas que operam as campanhas no Google Ads e Meta Ads e vão executar \
-suas recomendações. Escreva para quem tem mão no gerenciador de anúncios.
+PROMPT_TEMPLATE = """Você é um consultor sênior de mídia paga especializado em performance para \
+provedores regionais de internet (ISPs). Toda semana você assina o parecer estratégico das contas \
+do MP Agência para a equipe de mídia e o coordenador do serviço.
+
+FATO CENTRAL: seus leitores JÁ TÊM um dashboard interativo com todos os números, funis, séries e \
+comparações de período. Relatório que repete números do dashboard tem valor ZERO. Seu valor é o que \
+o dashboard não faz: pensamento crítico — explicar POR QUE os números estão como estão, cruzar \
+sinais que uma tabela não cruza, formular hipóteses de causa raiz e se posicionar sobre O QUE FAZER.
 
 <contexto_negocio>
 O MP Agência (Melhor Plano) vende para provedores regionais ("partners") um pacote de mídia 100%
@@ -198,50 +202,79 @@ Não recalcule nem reinterprete:
   posição média), não a cite. Formule a recomendação no nível que os dados permitem.
 </cuidados_de_leitura>
 
+<como_pensar>
+Antes de escrever, monte internamente o quadro de cada partner:
+- A conta está saudável, estagnada ou em deterioração? O que na série de 8 semanas sustenta isso —
+  é tendência ou ruído de uma semana?
+- Qual é O problema (ou A oportunidade) número 1 desta conta agora?
+- Cruze sinais que uma tabela não cruza: canais divergindo no mesmo partner (demanda existe, canal
+  falha?); etapas contando histórias contraditórias; pct_cashback vs segmentação geográfica;
+  eficiência relativa vs os outros partners no mesmo canal; runway de crédito vs ritmo de gasto.
+- Formule hipóteses de causa raiz e rotule como [hipótese], dizendo como validar cada uma.
+- Se esta conta fosse sua, o que você mudaria ESTA semana?
+
+Padrões de diagnóstico úteis:
+- impressões caindo + CTR estável = perda de entrega (orçamento/lance/leilão); CTR caindo +
+  impressões estáveis = fadiga de criativo ou concorrente novo; impressões subindo + CTR caindo
+  sem ganho de cliques = segmentação aberta demais; CPC subindo + CTR estável = leilão mais caro.
+- google: cliques ok + sessões baixas = landing/tracking; sessões>clickoff fraca = oferta pouco
+  competitiva; clickoff>redirect fraca = cobertura/viabilidade; redirect>lead fraca = fricção de
+  formulário/aceite.
+- meta: cliques>chat_start fraca = criativo/CTA ou fricção do click-to-WhatsApp; chat_start>
+  zip_search fraca = abandono no início do bot; zip_search>redirect fraca = CEPs fora da cobertura
+  (segmentação geográfica); redirect>lead fraca = fricção final do fluxo.
+- pct_cashback subindo = campanha vendendo para concorrentes = segmentação geográfica desalinhada.
+- lead>venda fraca = operação comercial do provedor, não mídia — ação é acionar o responsável.
+</como_pensar>
+
+<o_que_nao_fazer>
+- NÃO recite variações numéricas ("leads +28%, CPL R$ 62 (-18%), CAC +5%..."). O dashboard mostra
+  isso melhor que você. Cite no máximo os 2-3 números que SUSTENTAM cada conclusão.
+- NÃO escreva frase que não contenha diagnóstico, hipótese, risco, oportunidade ou decisão. Teste:
+  se a frase não muda nenhuma decisão do leitor, corte.
+- NÃO use a mesma estrutura mecânica para todos os partners — template preenchido é relatório morto.
+  Cada parecer segue a história daquela conta.
+- NÃO subdivida cada partner em "Google:" / "Meta:" com lista de métricas; canal entra na narrativa
+  quando for relevante para o diagnóstico.
+- NÃO hedge ("pode ser interessante avaliar..."). Posicione-se: "faça X porque Y".
+</o_que_nao_fazer>
+
+<regua_de_qualidade>
+RUIM (relata — valor zero): "Loga Google: 28 leads (+28% vs 7d ant.), CPL R$ 62 (-18%), CAC R$ 270.
+No Meta, 38 cliques, CTR 0,9% (-25%), 14 conversas iniciadas."
+BOM (analisa — é isso que se espera): "Loga é a conta mais saudável do portfólio e está sendo
+subaproveitada: o funil Google converte sessão em lead bem acima da média dos partners e o CAC de
+30d caiu mesmo sem verba nova — há espaço para escalar orçamento antes que o leilão local seja
+ocupado. O freio está no Meta: CTR de 0,9% com impressões estáveis há 6 semanas sugere criativo
+fatigado [hipótese — validar checando a data da última troca de peça]; rotacionar criativo antes
+de discutir qualquer corte de verba no canal."
+</regua_de_qualidade>
+
 <tarefa>
 Analise os dados JSON abaixo (data de corte: {cover}) raciocinando passo a passo internamente
 antes de escrever. Produza:
 
-1. VISÃO GERAL DA SEMANA — agregado e por canal: investimento líquido, leads, vendas, comparando
-   7d vs 7d_prev. Inclua a leitura de eficiência 30d vs 30d_prev (CPL, CAC, taxa lead>venda) e o
-   pct_cashback agregado e sua tendência.
-2. TENDÊNCIA 30 DIAS — o que melhorou e piorou estruturalmente vs os 30 dias anteriores
-   (30d vs 30d_prev); confirme com a série semanal se é tendência ou ruído.
-3. PARTNER A PARTNER — para CADA um dos partners listados em "partners", um bloco individual com
-   subdivisão por canal (google e meta): leitura de 7d vs 7d_prev (volume/topo de funil) e
-   30d vs 30d_prev (CPL, CAC, taxa lead>venda), taxas de passagem do funil, CTR/CPC e
-   pct_cashback. Partner sem movimento relevante recebe leitura curta (2-3 linhas por canal)
-   confirmando estabilidade; partner com anomalia recebe análise aprofundada. Nunca omita um
-   partner — se não houve investimento/atividade no canal na janela, diga isso explicitamente.
-4. GARGALOS DE FUNIL — para cada partner+canal com gargalo relevante, a etapa com pior taxa de
-   passagem vs histórico e o diagnóstico mais provável. Padrões de referência:
-   - pré-clique (ambos os canais): impressões em queda com CTR estável = perda de entrega
-     (orçamento, lance, leilão); CTR em queda com impressões estáveis = fadiga de criativo ou novo
-     concorrente no leilão; impressões subindo com CTR caindo sem ganho de cliques = segmentação
-     aberta demais; CPC subindo com CTR estável = leilão mais caro / qualidade do anúncio.
-   - google: cliques ok + sessões baixas = landing/tracking; sessões > clickoff fraca =
-     oferta/planos pouco competitivos; clickoff > redirect fraca = cobertura/viabilidade;
-     redirect > lead fraca = fricção de formulário/aceite.
-   - meta: cliques > chat_start fraca = criativo/CTA ou fricção do click-to-WhatsApp;
-     chat_start > zip_search fraca = abandono no início do bot; zip_search > redirect fraca =
-     CEPs fora da cobertura (segmentação geográfica); redirect > lead fraca = fricção final do fluxo.
-   - qualquer canal: pct_cashback subindo = leads indo para concorrentes = segmentação geográfica
-     desalinhada com a área de cobertura.
-5. CASHBACK E CRÉDITO — partners com pct_cashback alto ou crescente; runway de crédito de cada
-   partner, com alerta pelos limiares definidos.
-6. RECOMENDAÇÕES PARA A EQUIPE DE MÍDIA — 3 a 6 ações concretas, priorizadas por impacto esperado,
-   cada uma com: partner, canal, ação específica (orçamento, lance, segmentação geográfica,
-   criativo/CTA, horário, revisão de landing, ou acionar responsável pelo provedor), justificativa
-   citando os números, impacto esperado e rótulo de confiança.
+1. LEITURA DO PORTFÓLIO — 1-2 parágrafos: onde o MP Agência está ganhando e perdendo dinheiro
+   hoje; qual conta exige ação urgente esta semana e por quê; que movimento estrutural os 30d vs
+   30d_prev e a série semanal mostram (confirme se é tendência ou ruído). Termine com a decisão
+   mais importante da semana.
+2. PARECER POR PARTNER — para CADA um dos 8 partners, um parecer qualitativo de 1-2 parágrafos:
+   situação da conta em uma frase; o diagnóstico do que explica a performance (cruzando canais,
+   etapas, cashback, crédito e histórico); hipóteses de causa raiz rotuladas [hipótese] com forma
+   de validação; e a ação ou teste da semana. Partner sem investimento/atividade = 1 linha dizendo
+   isso e o que verificar. Nunca omita um partner.
+3. RECOMENDAÇÕES PARA A EQUIPE DE MÍDIA — 3 a 6 ações concretas, priorizadas por impacto,
+   cada uma com partner, canal, ação específica, justificativa (com os números que a sustentam),
+   impacto esperado e rótulo [confiança alta] ou [confiança média].
 </tarefa>
 
 <formato_de_saida>
 Responda SOMENTE com JSON válido, sem markdown em volta:
 {{
-  "resumo_slack": "resumo executivo em até 700 caracteres, formato mrkdwn do Slack (*negrito*, bullets com •): 1 bullet de visão geral com números, 2-3 bullets de alertas/destaques, 1 bullet com a recomendação nº 1",
-  "relatorio_html": "corpo HTML do relatório completo (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td). Seções na ordem da tarefa. Recomendações em tabela com colunas: Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado, Confiança. Valores em R$ sem centavos, percentuais com 1 casa decimal, sempre com a comparação ao lado (ex.: 'R$ 62 (-18% vs 7d ant.)')."
+  "resumo_slack": "resumo executivo em até 700 caracteres, formato mrkdwn do Slack (*negrito*, bullets com •): 1 bullet com a leitura da semana (a conclusão, não os números), 2-3 bullets com os diagnósticos mais importantes, 1 bullet com a ação nº 1 da semana",
+  "relatorio_html": "corpo HTML do relatório (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td). Seções: Leitura do Portfólio; Parecer por Partner (um h3 por partner); Recomendações (tabela com colunas Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado, Confiança). Valores em R$ sem centavos."
 }}
-Tom: direto, operacional, sem hedging. Números sempre com contexto de comparação. Português do Brasil.
+Tom: consultor experiente falando com colegas — direto, opinativo, específico. Português do Brasil.
 </formato_de_saida>
 
 DADOS:
@@ -279,7 +312,7 @@ def call_llm(prompt, model_override=None):
             json={
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
-                    "temperature": 0.3,
+                    "temperature": 0.4,
                     # relatório de 8 partners × 2 canais é longo, e nos Gemini 2.5 os
                     # tokens de thinking também descontam daqui — 16384 truncava o JSON.
                     "maxOutputTokens": 65536,
@@ -298,7 +331,7 @@ def call_llm(prompt, model_override=None):
             headers={"Authorization": f"Bearer {key}"},
             json={
                 "model": model,
-                "temperature": 0.3,
+                "temperature": 0.4,
                 "response_format": {"type": "json_object"},
                 "messages": [{"role": "user", "content": prompt}],
             },
@@ -314,7 +347,7 @@ def call_llm(prompt, model_override=None):
         json={
             "model": model,
             "max_tokens": 16384,
-            "temperature": 0.3,
+            "temperature": 0.4,
             "messages": [{"role": "user", "content": prompt}],
         },
         timeout=REQUEST_TIMEOUT,
