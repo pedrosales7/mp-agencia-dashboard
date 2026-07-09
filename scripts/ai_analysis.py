@@ -54,7 +54,7 @@ def _ratio(num, den):
     return round(num / den, 2) if den else None
 
 
-def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
+def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
                   cutoff_dt, valid_partners):
     windows = _window_bounds(cutoff_dt)
 
@@ -113,9 +113,10 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
                          .get("investimento_bruto"))
                 v["cpc_estimado"] = _ratio(bruto, v["cliques"]) if bruto else None
 
-    # série semanal (últimas 8 semanas) + crédito atual
+    # série semanal (últimas 8 semanas). Crédito/runway fica FORA do payload de
+    # propósito (decisão do Pedro 2026-07-09): já existem alertas dedicados e,
+    # se o dado estiver aqui, o modelo desvia o parecer pra isso.
     semanal = {p: rows[-8:] for p, rows in partner_weekly_dict.items() if p in valid_partners}
-    credito = {p: rows[-1] for p, rows in credit_dict.items() if p in valid_partners and rows}
 
     return {
         "data_corte": cutoff_dt.isoformat(),
@@ -125,7 +126,6 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
         "funil_google_por_partner": funil_google,
         "funil_meta_por_partner": funil_meta,
         "serie_semanal_por_partner": semanal,
-        "credito_atual_por_partner": credito,
     }
 
 
@@ -177,8 +177,6 @@ Não recalcule nem reinterprete:
 - Benchmark: compare cada partner primeiro com o próprio histórico (série semanal e janela
   anterior); use a média dos demais partners no mesmo canal apenas como referência secundária de
   taxas de passagem.
-- Crédito: estime runway = credito / gasto líquido semanal médio (últimas 4 semanas da série).
-  Runway < 3 semanas = alerta; 3 a 5 semanas = atenção.
 - Confiança: só recomende ações com confiança alta ou média. Rotule cada recomendação com
   [confiança alta] ou [confiança média]. Sem base suficiente = não recomende.
 </parametros_de_analise>
@@ -209,7 +207,8 @@ Antes de escrever, monte internamente o quadro de cada partner:
 - Qual é O problema (ou A oportunidade) número 1 desta conta agora?
 - Cruze sinais que uma tabela não cruza: canais divergindo no mesmo partner (demanda existe, canal
   falha?); etapas contando histórias contraditórias; pct_cashback vs segmentação geográfica;
-  eficiência relativa vs os outros partners no mesmo canal; runway de crédito vs ritmo de gasto.
+  pré-clique (impressões, ctr_pct, cpc_estimado) vs meio de funil; eficiência relativa vs os
+  outros partners no mesmo canal.
 - Formule hipóteses de causa raiz e rotule como [hipótese], dizendo como validar cada uma.
 - Se esta conta fosse sua, o que você mudaria ESTA semana?
 
@@ -237,6 +236,8 @@ Padrões de diagnóstico úteis:
 - NÃO subdivida cada partner em "Google:" / "Meta:" com lista de métricas; canal entra na narrativa
   quando for relevante para o diagnóstico.
 - NÃO hedge ("pode ser interessante avaliar..."). Posicione-se: "faça X porque Y".
+- NÃO comente crédito, saldo ou runway do pacote — já existem alertas dedicados a isso. Escopo
+  deste relatório: performance de campanha e gargalos de funil, só.
 </o_que_nao_fazer>
 
 <regua_de_qualidade>
@@ -256,7 +257,8 @@ antes de escrever. Produza:
    conta exige ação urgente e por quê, e a decisão mais importante da semana (30d vs 30d_prev e
    série semanal separam tendência de ruído).
 2. PARECER POR PARTNER — para CADA um dos 8 partners, um parecer de 3 a 5 frases: situação em uma
-   frase; diagnóstico do que explica a performance (cruzando canais, etapas, cashback, crédito,
+   frase; diagnóstico do que explica a performance (cruzando canais, etapas do funil — inclusive
+   pré-clique via impressões/ctr_pct/cpc_estimado quando o gargalo estiver lá —, cashback e
    histórico); hipótese de causa raiz rotulada [hipótese] com forma de validação; ação da semana.
    Partner sem investimento/atividade = 1 linha dizendo isso e o que verificar. Nunca omita um
    partner.

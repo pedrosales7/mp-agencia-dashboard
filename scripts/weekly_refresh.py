@@ -503,7 +503,7 @@ def main():
     if ai_analysis.enabled():
         try:
             payload = ai_analysis.build_payload(
-                all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
+                all_daily, all_dfg, all_dfm, partner_weekly_dict,
                 cutoff_dt, VALID_PARTNERS)
             result = ai_analysis.generate(payload, cover)
             with open(ANALYSIS_PATH, "w", encoding="utf-8") as f:
