@@ -242,27 +242,24 @@ Padrões de diagnóstico úteis:
 <regua_de_qualidade>
 RUIM (relata — valor zero): "Loga Google: 28 leads (+28% vs 7d ant.), CPL R$ 62 (-18%), CAC R$ 270.
 No Meta, 38 cliques, CTR 0,9% (-25%), 14 conversas iniciadas."
-BOM (analisa — é isso que se espera): "Loga é a conta mais saudável do portfólio e está sendo
-subaproveitada: o funil Google converte sessão em lead bem acima da média dos partners e o CAC de
-30d caiu mesmo sem verba nova — há espaço para escalar orçamento antes que o leilão local seja
-ocupado. O freio está no Meta: CTR de 0,9% com impressões estáveis há 6 semanas sugere criativo
-fatigado [hipótese — validar checando a data da última troca de peça]; rotacionar criativo antes
-de discutir qualquer corte de verba no canal."
+BOM (analisa, enxuto — é isso que se espera): "Loga é a conta mais saudável do portfólio e está
+subaproveitada: converte sessão em lead acima da média e o CAC 30d caiu sem verba nova — escalar
+orçamento no Google. Freio no Meta: CTR 0,9% com impressões estáveis há 6 semanas indica criativo
+fatigado [hipótese — checar data da última troca]. Rotacionar criativo antes de cortar verba."
 </regua_de_qualidade>
 
 <tarefa>
 Analise os dados JSON abaixo (data de corte: {cover}) raciocinando passo a passo internamente
 antes de escrever. Produza:
 
-1. LEITURA DO PORTFÓLIO — 1-2 parágrafos: onde o MP Agência está ganhando e perdendo dinheiro
-   hoje; qual conta exige ação urgente esta semana e por quê; que movimento estrutural os 30d vs
-   30d_prev e a série semanal mostram (confirme se é tendência ou ruído). Termine com a decisão
-   mais importante da semana.
-2. PARECER POR PARTNER — para CADA um dos 8 partners, um parecer qualitativo de 1-2 parágrafos:
-   situação da conta em uma frase; o diagnóstico do que explica a performance (cruzando canais,
-   etapas, cashback, crédito e histórico); hipóteses de causa raiz rotuladas [hipótese] com forma
-   de validação; e a ação ou teste da semana. Partner sem investimento/atividade = 1 linha dizendo
-   isso e o que verificar. Nunca omita um partner.
+1. LEITURA DO PORTFÓLIO — 1 parágrafo curto: onde o MP Agência ganha e perde dinheiro hoje, qual
+   conta exige ação urgente e por quê, e a decisão mais importante da semana (30d vs 30d_prev e
+   série semanal separam tendência de ruído).
+2. PARECER POR PARTNER — para CADA um dos 8 partners, um parecer de 3 a 5 frases: situação em uma
+   frase; diagnóstico do que explica a performance (cruzando canais, etapas, cashback, crédito,
+   histórico); hipótese de causa raiz rotulada [hipótese] com forma de validação; ação da semana.
+   Partner sem investimento/atividade = 1 linha dizendo isso e o que verificar. Nunca omita um
+   partner.
 3. RECOMENDAÇÕES PARA A EQUIPE DE MÍDIA — 3 a 6 ações concretas, priorizadas por impacto,
    cada uma com partner, canal, ação específica, justificativa (com os números que a sustentam),
    impacto esperado e rótulo [confiança alta] ou [confiança média].
@@ -274,7 +271,10 @@ Responda SOMENTE com JSON válido, sem markdown em volta:
   "resumo_slack": "resumo executivo em até 700 caracteres, formato mrkdwn do Slack (*negrito*, bullets com •): 1 bullet com a leitura da semana (a conclusão, não os números), 2-3 bullets com os diagnósticos mais importantes, 1 bullet com a ação nº 1 da semana",
   "relatorio_html": "corpo HTML do relatório (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td). Seções: Leitura do Portfólio; Parecer por Partner (um h3 por partner); Recomendações (tabela com colunas Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado, Confiança). Valores em R$ sem centavos."
 }}
-Tom: consultor experiente falando com colegas — direto, opinativo, específico. Português do Brasil.
+Tom: consultor experiente falando com colegas — direto, opinativo, específico. Estilo enxuto:
+frases curtas, sem preâmbulos ("vale destacar que", "é importante notar"), sem adjetivo que não
+carrega informação, sem repetir o que outra seção já disse. Se dá para dizer em 8 palavras, não
+use 20. Português do Brasil.
 </formato_de_saida>
 
 DADOS:
