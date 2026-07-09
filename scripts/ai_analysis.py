@@ -205,6 +205,10 @@ Antes de escrever, monte internamente o quadro de cada partner:
 - A conta está saudável, estagnada ou em deterioração? O que na série de 8 semanas sustenta isso —
   é tendência ou ruído de uma semana?
 - Qual é O problema (ou A oportunidade) número 1 desta conta agora?
+- SEMPRE cheque o pré-clique antes de concluir: compare ctr_pct e cpc_estimado da conta com os
+  demais partners do MESMO canal e com as janelas anteriores. CTR muito abaixo dos pares ou em
+  queda = problema de criativo/segmentação que nenhuma métrica de funil vai revelar; CPC fora da
+  curva = leilão/qualidade. Se o pré-clique estiver saudável, diga onde o funil trava DEPOIS dele.
 - Cruze sinais que uma tabela não cruza: canais divergindo no mesmo partner (demanda existe, canal
   falha?); etapas contando histórias contraditórias; pct_cashback vs segmentação geográfica;
   pré-clique (impressões, ctr_pct, cpc_estimado) vs meio de funil; eficiência relativa vs os
