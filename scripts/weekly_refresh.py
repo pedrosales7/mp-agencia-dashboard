@@ -507,7 +507,8 @@ def main():
                 cutoff_dt, VALID_PARTNERS)
             result = ai_analysis.generate(payload, cover)
             with open(ANALYSIS_PATH, "w", encoding="utf-8") as f:
-                f.write(ai_analysis.render_page(result["relatorio_html"], cover, cutoff))
+                f.write(ai_analysis.render_page(result["relatorio_html"], cover, cutoff,
+                                                model=result.get("_model")))
             analysis_url = (f"{PAGES_URL.rstrip('/')}/analise.html?v={cutoff}"
                             if PAGES_URL else "analise.html")
             analysis_block = (f"\n🤖 *Análise IA da semana:*\n{result['resumo_slack']}\n"

@@ -18,6 +18,7 @@ gratuito que cobre folgado 1 chamada/semana.
 import json
 import os
 import re
+import time
 from collections import defaultdict
 from datetime import timedelta
 
@@ -265,8 +266,10 @@ def provider_info():
     return provider, model
 
 
-def call_llm(prompt):
+def call_llm(prompt, model_override=None):
     provider, model = provider_info()
+    if model_override:
+        model = model_override
     key = os.environ["LLM_API_KEY"]
 
     if provider == "gemini":
@@ -333,9 +336,37 @@ def parse_response(text):
     return data
 
 
+RETRYABLE_STATUS = {429, 500, 502, 503, 529}
+
+
 def generate(payload, cover):
-    raw = call_llm(build_prompt(payload, cover))
-    return parse_response(raw)
+    """Chama o LLM com retry e fallback de modelo.
+
+    Ordem: modelo configurado (2 tentativas, pausa entre elas) e, se ele seguir
+    indisponível (ex.: 429 por modelo fora do free tier), o default do provedor.
+    Erros não-transientes (4xx de auth/payload) estouram na hora.
+    """
+    prompt = build_prompt(payload, cover)
+    provider, model = provider_info()
+    attempts = [model, model]
+    if model != DEFAULT_MODELS[provider]:
+        attempts.append(DEFAULT_MODELS[provider])
+    last_err = None
+    for i, m in enumerate(attempts):
+        if i:
+            time.sleep(45)
+        try:
+            data = parse_response(call_llm(prompt, model_override=m))
+            data["_model"] = m
+            return data
+        except requests.HTTPError as e:
+            status = e.response.status_code if e.response is not None else None
+            if status not in RETRYABLE_STATUS:
+                raise
+            print(f"Aviso: {provider}/{m} retornou {status}; "
+                  f"{'tentando fallback' if i + 1 < len(attempts) else 'sem mais opções'}.")
+            last_err = e
+    raise last_err
 
 
 # ── página publicada ──────────────────────────────────────────────────────
@@ -385,7 +416,8 @@ PAGE_TEMPLATE = """<!doctype html>
 """
 
 
-def render_page(relatorio_html, cover, cutoff):
-    provider, model = provider_info()
+def render_page(relatorio_html, cover, cutoff, model=None):
+    provider, configured = provider_info()
     return PAGE_TEMPLATE.format(
-        cover=cover, cutoff=cutoff, provider=provider, model=model, body=relatorio_html)
+        cover=cover, cutoff=cutoff, provider=provider, model=model or configured,
+        body=relatorio_html)
