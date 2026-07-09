@@ -27,6 +27,8 @@ from datetime import date, timedelta
 
 import requests
 
+import ai_analysis
+
 # ── configuração ──────────────────────────────────────────────────────────
 
 METABASE_URL = os.environ["METABASE_URL"].rstrip("/")
@@ -48,6 +50,7 @@ DATABASE_ID = 69
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 HTML_PATH = os.path.join(REPO_ROOT, "docs", "index.html")
+ANALYSIS_PATH = os.path.join(REPO_ROOT, "docs", "analise.html")
 CACHE_PATH = os.path.join(REPO_ROOT, "data", "cache", "historical_data.json")
 QUERIES_PATH = os.path.join(SCRIPT_DIR, "queries.sql")
 
@@ -494,6 +497,29 @@ def main():
     print(f"OK snap={len(full_snapshot)}rows fg={len(full_fg)}rows fm={len(full_fm)}rows "
           f"daily_compact={len(daily_compact)}rows html={len(html)//1024}KB")
 
+    # ── análise IA (opcional — nunca derruba o refresh) ──────────────────
+
+    analysis_block = ""
+    if ai_analysis.enabled():
+        try:
+            payload = ai_analysis.build_payload(
+                all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
+                cutoff_dt, VALID_PARTNERS)
+            result = ai_analysis.generate(payload, cover)
+            with open(ANALYSIS_PATH, "w", encoding="utf-8") as f:
+                f.write(ai_analysis.render_page(result["relatorio_html"], cover, cutoff))
+            analysis_url = (f"{PAGES_URL.rstrip('/')}/analise.html?v={cutoff}"
+                            if PAGES_URL else "analise.html")
+            analysis_block = (f"\n🤖 *Análise IA da semana:*\n{result['resumo_slack']}\n"
+                              f"📄 Relatório completo: {analysis_url}\n")
+            print(f"Análise IA ok ({len(result['relatorio_html'])//1024}KB de relatório).")
+        except Exception as e:
+            print(f"Aviso: análise IA falhou ({type(e).__name__}: {e}) — refresh segue sem ela.",
+                  file=sys.stderr)
+            analysis_block = "\n_⚠️ Análise IA indisponível nesta semana._\n"
+    else:
+        print("LLM_API_KEY ausente — análise IA pulada.")
+
     # ── Slack ─────────────────────────────────────────────────────────────
 
     dashboard_url = f"{PAGES_URL}?v={cutoff}" if PAGES_URL else None
@@ -503,7 +529,7 @@ def main():
     slack_post(
         f"{prefix}📊 Dashboard MP Agência — Funil Ads-to-Sale ({cover})\n"
         f"Dados atualizados com snapshot de {cover}. Acesse o dashboard interativo:"
-        f"{link_line}{channel_mention}"
+        f"{link_line}{analysis_block}{channel_mention}"
     )
 
 

@@ -38,6 +38,10 @@ jobs:
           TEST_MODE: ${{ inputs.test_mode }}
           PAGES_URL: ${{ vars.PAGES_URL }}
           SLACK_MENTION_ON_ERROR: '<@U0753LAQU1F>'
+          # Análise IA (opcional): sem LLM_API_KEY o passo é pulado sem erro.
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }} # gemini (default) | openai | anthropic
+          LLM_MODEL: ${{ vars.LLM_MODEL }}       # opcional, default por provedor
         run: python scripts/weekly_refresh.py
 
       - name: Commit updated dashboard
@@ -45,7 +49,7 @@ jobs:
         run: |
           git config user.name "mp-agencia-bot"
           git config user.email "actions@github.com"
-          git add docs/index.html data/cache/historical_data.json
+          git add docs data/cache/historical_data.json
           if git diff --cached --quiet; then
             echo "no_changes=true" >> "$GITHUB_OUTPUT"
             echo "Nada a commitar."
