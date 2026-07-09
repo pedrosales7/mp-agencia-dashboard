@@ -280,7 +280,9 @@ def call_llm(prompt, model_override=None):
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
                     "temperature": 0.3,
-                    "maxOutputTokens": 16384,
+                    # relatório de 8 partners × 2 canais é longo, e nos Gemini 2.5 os
+                    # tokens de thinking também descontam daqui — 16384 truncava o JSON.
+                    "maxOutputTokens": 65536,
                     "responseMimeType": "application/json",
                 },
             },
@@ -325,7 +327,8 @@ def parse_response(text):
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
     start, end = text.find("{"), text.rfind("}")
     if start == -1 or end <= start:
-        raise RuntimeError(f"Resposta do LLM sem JSON reconhecível: {text[:200]!r}")
+        raise RuntimeError(f"Resposta do LLM sem JSON reconhecível (truncada?): "
+                           f"{len(text)} chars, início: {text[:200]!r}")
     data = json.loads(text[start:end + 1])
     for field in ("resumo_slack", "relatorio_html"):
         if not isinstance(data.get(field), str) or not data[field].strip():
