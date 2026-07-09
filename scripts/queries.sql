@@ -585,7 +585,9 @@ config AS (
     WHERE deleted_at IS NULL AND utm_source = 'google'
 ),
 clicks AS (
-    SELECT cf.partnership_id, g.date AS dia, SUM(g.clicks) AS cliques
+    -- impressoes adicionada 2026-07-09: alimenta só o payload da análise IA
+    -- (CTR/CPC); o dashboard não usa (build_compact_daily_funnel ignora).
+    SELECT cf.partnership_id, g.date AS dia, SUM(g.clicks) AS cliques, SUM(g.impressions) AS impressoes
     FROM ads.google_ads_campaigns_daily_data g
     JOIN config cf ON cf.campaign_name = g.name
     JOIN periodo ON g.date BETWEEN periodo.d_ini AND periodo.d_fim
@@ -643,6 +645,7 @@ mapping AS (
 SELECT
     dp.dia, m.id_mp,
     COALESCE(cl.cliques,0) AS cliques,
+    COALESCE(cl.impressoes,0) AS impressoes,
     COALESCE(s.sessoes,0) AS sessoes,
     COALESCE(co.clickoffs,0) AS clickoff,
     COALESCE(r.redirects_total,0) AS redirect,
@@ -683,7 +686,8 @@ campaign_config AS (
     WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
 ),
 clicks AS (
-    SELECT cf.partnership_id, f.date::date AS dia, SUM(f.link_click_unique) AS cliques
+    -- impressoes adicionada 2026-07-09: alimenta só o payload da análise IA (CTR/CPC).
+    SELECT cf.partnership_id, f.date::date AS dia, SUM(f.link_click_unique) AS cliques, SUM(f.impressions) AS impressoes
     FROM ads.facebook_ads_daily_data f
     JOIN campaign_config cf ON cf.campaign_name = f.campaign_name
     JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
@@ -763,6 +767,7 @@ days_partners AS (
 )
 SELECT dp.dia, dp.id_mp_canon AS id_mp,
        COALESCE(cl.cliques,0) AS cliques,
+       COALESCE(cl.impressoes,0) AS impressoes,
        COALESCE(cs.conversas,0) AS chat_start,
        COALESCE(zs.zip_search,0) AS zip_search,
        COALESCE(r.redirects,0) AS redirect,

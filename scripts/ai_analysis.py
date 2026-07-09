@@ -67,11 +67,13 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
                 for f in ("bruto", "cashback", "liquido", "leads", "vendas"):
                     agg[k][f] += r.get(f) or 0
         for (id_mp, canal), v in agg.items():
-            liq = round(v["liquido"])
+            bruto, liq = round(v["bruto"]), round(v["liquido"])
             leads, vendas = int(v["leads"]), int(v["vendas"])
             invest.setdefault(id_mp, {}).setdefault(canal, {})[wkey] = {
+                "investimento_bruto": bruto,
                 "investimento_liquido": liq,
                 "cashback": round(v["cashback"]),
+                "pct_cashback": round(100 * v["cashback"] / v["bruto"], 1) if v["bruto"] else None,
                 "leads": leads,
                 "vendas": vendas,
                 "cpl": _ratio(liq, leads),
@@ -92,11 +94,23 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
                 out.setdefault(id_mp, {})[wkey] = dict(v)
         return out
 
-    fg_fields = ("cliques", "sessoes", "clickoff", "redirect", "leads", "vendas")
-    fm_fields = ("cliques", "chat_start", "zip_search", "redirect", "leads", "vendas")
-    wkeys = ("7d", "7d_prev", "30d")
+    fg_fields = ("impressoes", "cliques", "sessoes", "clickoff", "redirect", "leads", "vendas")
+    fm_fields = ("impressoes", "cliques", "chat_start", "zip_search", "redirect", "leads", "vendas")
+    wkeys = ("7d", "7d_prev", "30d", "30d_prev")
     funil_google = agg_funnel(all_dfg, fg_fields, wkeys)
     funil_meta = agg_funnel(all_dfm, fm_fields, wkeys)
+
+    # métricas de pré-clique derivadas aqui (LLM não faz aritmética confiável).
+    # cpc_estimado usa investimento bruto (financeiro) / cliques (plataforma de ads):
+    # bases diferentes do gerenciador — serve pra tendência, não pra auditoria.
+    for funil, canal in ((funil_google, "google"), (funil_meta, "meta")):
+        for id_mp, per_window in funil.items():
+            for wkey, v in per_window.items():
+                v["ctr_pct"] = (round(100 * v["cliques"] / v["impressoes"], 2)
+                                if v.get("impressoes") else None)
+                bruto = (invest.get(id_mp, {}).get(canal, {}).get(wkey, {})
+                         .get("investimento_bruto"))
+                v["cpc_estimado"] = _ratio(bruto, v["cliques"]) if bruto else None
 
     # série semanal (últimas 8 semanas) + crédito atual
     semanal = {p: rows[-8:] for p, rows in partner_weekly_dict.items() if p in valid_partners}
@@ -116,43 +130,118 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict, credit_dict,
 
 # ── prompt ────────────────────────────────────────────────────────────────
 
-PROMPT_TEMPLATE = """Você é um analista sênior de mídia paga da MP Agência (Melhor Plano), \
-agência de performance para provedores regionais de internet (ISPs). Modelo de negócio: \
-o provedor ("partner") compra um pacote 100% investido em mídia, sem fee; leads que fecham \
-com outro provedor geram cashback de reinvestimento.
+PROMPT_TEMPLATE = """Você é um analista sênior de mídia paga especializado em performance para \
+provedores regionais de internet (ISPs). Você produz o relatório semanal de campanhas do MP Agência \
+para a EQUIPE DE MÍDIA — pessoas que operam as campanhas no Google Ads e Meta Ads e vão executar \
+suas recomendações. Escreva para quem tem mão no gerenciador de anúncios.
 
-Dois canais por partner:
-- google: Google Ads. Funil: cliques > sessoes > clickoff > redirect > leads > vendas.
-- meta: Meta Ads via WhatsApp. Funil: cliques > chat_start > zip_search > redirect > leads > vendas.
+<contexto_negocio>
+O MP Agência (Melhor Plano) vende para provedores regionais ("partners") um pacote de mídia 100%
+investido em campanhas, sem fee de agência. São 2 canais por partner:
+- google: campanhas de pesquisa no Google Ads. Funil: impressoes > cliques > sessoes > clickoff >
+  redirect > leads > vendas.
+- meta: campanhas de WhatsApp no Meta Ads (click-to-WhatsApp com bot). Funil: impressoes > cliques >
+  chat_start > zip_search > redirect > leads > vendas.
 
-Definições fixas (não recalcule diferente):
-- Lead produtivo: lead aceito pelo provedor. Venda: situação sold/installed/scheduled.
-- CPL e CAC já vêm calculados sobre investimento LÍQUIDO (bruto - cashback).
-- Atribuição sempre ao partner anunciante (quem pagou a campanha).
+MECÂNICA DO CASHBACK (importante): quando o lead gerado pela campanha de um partner fecha com OUTRO
+provedor (ex.: sem cobertura do anunciante no CEP do usuário), o anunciante recebe cashback de
+reinvestimento. Por isso:
+- investimento_liquido = investimento_bruto - cashback. CPL e CAC JÁ vêm calculados sobre o líquido.
+- Cashback alto NÃO é "dinheiro de volta, ótimo": é sinal de que a campanha está gerando demanda
+  fora da área de cobertura do anunciante. pct_cashback crescente pede revisão de segmentação
+  geográfica (raios, CEPs, cidades) da campanha.
+- Atribuição de lead e venda é SEMPRE ao partner anunciante (quem pagou a campanha), nunca ao
+  provedor que recebeu o lead.
+</contexto_negocio>
 
-Cuidados de leitura:
-- Vendas têm lag de fechamento: na janela 7d o CAC sai inflado e vendas subestimadas. \
-Compare 7d vs 7d_prev para tendência de topo/meio de funil; use 30d para eficiência (CPL/CAC).
-- Volumes pequenos geram variações percentuais grandes — só aponte anomalia com base mínima \
-(>= ~10 eventos na etapa) ou padrão persistente na série semanal.
-- KPIs (kpis_por_partner_canal_janela) e funis usam metodologias de atribuição levemente \
-diferentes; pequenas divergências de leads/vendas entre eles são esperadas, não são erro.
-- credito_atual_por_partner: "credito" é o saldo restante do pacote. Estime runway dividindo \
-pelo gasto líquido semanal médio (serie_semanal_por_partner) e alerte se < 3 semanas.
+<definicoes_fixas>
+Não recalcule nem reinterprete:
+- Lead (produtivo): lead registrado e aceito pelo provedor.
+- Venda: lead com situação sold, installed ou scheduled.
+- CPL = investimento líquido / leads. CAC = investimento líquido / vendas.
+- ctr_pct = cliques / impressões (%). cpc_estimado = investimento bruto / cliques — é ESTIMADO:
+  investimento vem do sistema financeiro e cliques da plataforma de ads, bases diferentes do
+  gerenciador. Use para tendência e comparação entre janelas, não para auditar o valor absoluto.
+- Valores monetários em R$ (BRL).
+</definicoes_fixas>
 
-Sua tarefa, com os dados JSON abaixo (data de corte {cover}):
-1. Visão geral da semana (7d vs 7d_prev): investimento, leads, vendas, CPL/CAC 30d, agregado e por canal.
-2. Destaques e alertas por partner — só partners com movimento relevante (queda/alta forte, funil travado, crédito acabando).
-3. Gargalos de funil: para cada partner+canal relevante, identifique a etapa com pior taxa de passagem vs histórico e o diagnóstico provável (ex.: cliques altos + chat_start baixo = criativo/segmentação; redirect alto + leads baixos = qualificação/aceite do provedor; sessões baixas por clique = landing/tracking).
-4. Recomendações: 3 a 6 ações concretas e priorizadas para as campanhas (orçamento, criativo, segmentação, horário, negociação com o provedor), cada uma com partner, canal, justificativa nos dados e impacto esperado.
+<parametros_de_analise>
+- Base mínima para apontar anomalia: >= 10 eventos na etapa OU padrão que se repete em >= 3 semanas
+  da série semanal. Abaixo disso, não alarme — no máximo cite como "sinal fraco, monitorar".
+- Variação relevante: |variação| >= 25% entre janelas comparadas, respeitando a base mínima.
+- Benchmark: compare cada partner primeiro com o próprio histórico (série semanal e janela
+  anterior); use a média dos demais partners no mesmo canal apenas como referência secundária de
+  taxas de passagem.
+- Crédito: estime runway = credito / gasto líquido semanal médio (últimas 4 semanas da série).
+  Runway < 3 semanas = alerta; 3 a 5 semanas = atenção.
+- Confiança: só recomende ações com confiança alta ou média. Rotule cada recomendação com
+  [confiança alta] ou [confiança média]. Sem base suficiente = não recomende.
+</parametros_de_analise>
 
-Responda SOMENTE com JSON válido, sem markdown em volta, neste formato:
+<cuidados_de_leitura>
+- Vendas têm lag de fechamento (lead vira venda dias depois): em janelas de 7d, vendas ficam
+  subestimadas e CAC inflado. Use 7d vs 7d_prev para topo e meio de funil (impressões, cliques,
+  sessões/conversas, redirects, leads) e 30d vs 30d_prev para eficiência (CPL, CAC, taxa
+  lead>venda) e leitura de custo.
+- kpis_por_partner_canal_janela e funil_*_por_partner usam metodologias de atribuição levemente
+  diferentes; pequenas divergências de leads/vendas entre os dois blocos são esperadas — não trate
+  como erro nem some os dois.
+- Impressões, CTR e CPC existem só nos blocos de funil (funil_google_por_partner /
+  funil_meta_por_partner).
+- "sessoes" (Google) pode ter ~1% de dupla contagem na virada do dia. Ignore variações pequenas
+  nessa etapa.
+- A etapa lead > venda depende da operação comercial do PROVEDOR (atendimento, agenda de
+  instalação), não da campanha. Se o gargalo for aí, a recomendação é acionar o responsável pela
+  conta/provedor, não mexer em mídia.
+- Não invente dados: se uma informação não está no JSON (ex.: nome de campanha, criativo específico,
+  posição média), não a cite. Formule a recomendação no nível que os dados permitem.
+</cuidados_de_leitura>
+
+<tarefa>
+Analise os dados JSON abaixo (data de corte: {cover}) raciocinando passo a passo internamente
+antes de escrever. Produza:
+
+1. VISÃO GERAL DA SEMANA — agregado e por canal: investimento líquido, leads, vendas, comparando
+   7d vs 7d_prev. Inclua a leitura de eficiência 30d vs 30d_prev (CPL, CAC, taxa lead>venda) e o
+   pct_cashback agregado e sua tendência.
+2. TENDÊNCIA 30 DIAS — o que melhorou e piorou estruturalmente vs os 30 dias anteriores
+   (30d vs 30d_prev); confirme com a série semanal se é tendência ou ruído.
+3. PARTNER A PARTNER — para CADA um dos partners listados em "partners", um bloco individual com
+   subdivisão por canal (google e meta): leitura de 7d vs 7d_prev (volume/topo de funil) e
+   30d vs 30d_prev (CPL, CAC, taxa lead>venda), taxas de passagem do funil, CTR/CPC e
+   pct_cashback. Partner sem movimento relevante recebe leitura curta (2-3 linhas por canal)
+   confirmando estabilidade; partner com anomalia recebe análise aprofundada. Nunca omita um
+   partner — se não houve investimento/atividade no canal na janela, diga isso explicitamente.
+4. GARGALOS DE FUNIL — para cada partner+canal com gargalo relevante, a etapa com pior taxa de
+   passagem vs histórico e o diagnóstico mais provável. Padrões de referência:
+   - pré-clique (ambos os canais): impressões em queda com CTR estável = perda de entrega
+     (orçamento, lance, leilão); CTR em queda com impressões estáveis = fadiga de criativo ou novo
+     concorrente no leilão; impressões subindo com CTR caindo sem ganho de cliques = segmentação
+     aberta demais; CPC subindo com CTR estável = leilão mais caro / qualidade do anúncio.
+   - google: cliques ok + sessões baixas = landing/tracking; sessões > clickoff fraca =
+     oferta/planos pouco competitivos; clickoff > redirect fraca = cobertura/viabilidade;
+     redirect > lead fraca = fricção de formulário/aceite.
+   - meta: cliques > chat_start fraca = criativo/CTA ou fricção do click-to-WhatsApp;
+     chat_start > zip_search fraca = abandono no início do bot; zip_search > redirect fraca =
+     CEPs fora da cobertura (segmentação geográfica); redirect > lead fraca = fricção final do fluxo.
+   - qualquer canal: pct_cashback subindo = leads indo para concorrentes = segmentação geográfica
+     desalinhada com a área de cobertura.
+5. CASHBACK E CRÉDITO — partners com pct_cashback alto ou crescente; runway de crédito de cada
+   partner, com alerta pelos limiares definidos.
+6. RECOMENDAÇÕES PARA A EQUIPE DE MÍDIA — 3 a 6 ações concretas, priorizadas por impacto esperado,
+   cada uma com: partner, canal, ação específica (orçamento, lance, segmentação geográfica,
+   criativo/CTA, horário, revisão de landing, ou acionar responsável pelo provedor), justificativa
+   citando os números, impacto esperado e rótulo de confiança.
+</tarefa>
+
+<formato_de_saida>
+Responda SOMENTE com JSON válido, sem markdown em volta:
 {{
-  "resumo_slack": "resumo executivo em até 700 caracteres, formato mrkdwn do Slack (*negrito*, bullets com •), 3-5 bullets: 1 de visão geral, 2-3 alertas/destaques, 1 apontando a recomendação nº1",
-  "relatorio_html": "corpo HTML do relatório completo (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td — sem html/head/body/script/style). Seções: Visão geral; Destaques por partner; Gargalos de funil; Recomendações (tabela com colunas Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado). Valores em R$ sem centavos."
+  "resumo_slack": "resumo executivo em até 700 caracteres, formato mrkdwn do Slack (*negrito*, bullets com •): 1 bullet de visão geral com números, 2-3 bullets de alertas/destaques, 1 bullet com a recomendação nº 1",
+  "relatorio_html": "corpo HTML do relatório completo (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td). Seções na ordem da tarefa. Recomendações em tabela com colunas: Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado, Confiança. Valores em R$ sem centavos, percentuais com 1 casa decimal, sempre com a comparação ao lado (ex.: 'R$ 62 (-18% vs 7d ant.)')."
 }}
-
-Escreva em português do Brasil, tom direto de analista, números sempre com contexto de comparação.
+Tom: direto, operacional, sem hedging. Números sempre com contexto de comparação. Português do Brasil.
+</formato_de_saida>
 
 DADOS:
 {payload}
