@@ -118,6 +118,30 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
     # se o dado estiver aqui, o modelo desvia o parecer pra isso.
     semanal = {p: rows[-8:] for p, rows in partner_weekly_dict.items() if p in valid_partners}
 
+    # benchmark de pré-clique 30d — comparação com os pares calculada AQUI.
+    # Sem isso o modelo ignora ctr/cpc mesmo com instrução explícita (testado
+    # em 2026-07-09): LLM comenta o que está saliente nos dados, não o que a
+    # instrução manda procurar.
+    benchmark = {}
+    for canal, funil in (("google", funil_google), ("meta", funil_meta)):
+        stats = {id_mp: pw["30d"] for id_mp, pw in funil.items()
+                 if pw.get("30d", {}).get("ctr_pct") is not None}
+        for id_mp, w in stats.items():
+            peers_ctr = [v["ctr_pct"] for k, v in stats.items() if k != id_mp]
+            peers_cpc = [v["cpc_estimado"] for k, v in stats.items()
+                         if k != id_mp and v.get("cpc_estimado")]
+            entry = {"ctr_pct_30d": w["ctr_pct"], "cpc_estimado_30d": w.get("cpc_estimado")}
+            if peers_ctr:
+                media = sum(peers_ctr) / len(peers_ctr)
+                entry["ctr_media_outros_partners"] = round(media, 2)
+                if media:
+                    entry["ctr_vs_pares_pct"] = round(100 * (w["ctr_pct"] - media) / media, 1)
+            if peers_cpc and w.get("cpc_estimado"):
+                media = sum(peers_cpc) / len(peers_cpc)
+                entry["cpc_media_outros_partners"] = round(media, 2)
+                entry["cpc_vs_pares_pct"] = round(100 * (w["cpc_estimado"] - media) / media, 1)
+            benchmark.setdefault(id_mp, {})[canal] = entry
+
     return {
         "data_corte": cutoff_dt.isoformat(),
         "janelas": {k: {"inicio": v[0], "fim": v[1]} for k, v in windows.items()},
@@ -126,6 +150,7 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
         "funil_google_por_partner": funil_google,
         "funil_meta_por_partner": funil_meta,
         "serie_semanal_por_partner": semanal,
+        "benchmark_pre_clique_30d": benchmark,
     }
 
 
@@ -205,10 +230,10 @@ Antes de escrever, monte internamente o quadro de cada partner:
 - A conta está saudável, estagnada ou em deterioração? O que na série de 8 semanas sustenta isso —
   é tendência ou ruído de uma semana?
 - Qual é O problema (ou A oportunidade) número 1 desta conta agora?
-- SEMPRE cheque o pré-clique antes de concluir: compare ctr_pct e cpc_estimado da conta com os
-  demais partners do MESMO canal e com as janelas anteriores. CTR muito abaixo dos pares ou em
-  queda = problema de criativo/segmentação que nenhuma métrica de funil vai revelar; CPC fora da
-  curva = leilão/qualidade. Se o pré-clique estiver saudável, diga onde o funil trava DEPOIS dele.
+- O bloco benchmark_pre_clique_30d já traz a comparação de CTR e CPC de cada conta com a média
+  dos outros partners no mesmo canal (ctr_vs_pares_pct / cpc_vs_pares_pct). Desvio de 30% ou mais
+  DEVE aparecer no parecer com diagnóstico: CTR muito abaixo dos pares = criativo/segmentação;
+  CPC muito acima = leilão/qualidade do anúncio. Pré-clique saudável = diga onde trava depois.
 - Cruze sinais que uma tabela não cruza: canais divergindo no mesmo partner (demanda existe, canal
   falha?); etapas contando histórias contraditórias; pct_cashback vs segmentação geográfica;
   pré-clique (impressões, ctr_pct, cpc_estimado) vs meio de funil; eficiência relativa vs os
@@ -242,6 +267,7 @@ Padrões de diagnóstico úteis:
 - NÃO hedge ("pode ser interessante avaliar..."). Posicione-se: "faça X porque Y".
 - NÃO comente crédito, saldo ou runway do pacote — já existem alertas dedicados a isso. Escopo
   deste relatório: performance de campanha e gargalos de funil, só.
+- NÃO ultrapasse 5 frases por parecer de partner. Limite duro.
 </o_que_nao_fazer>
 
 <regua_de_qualidade>
