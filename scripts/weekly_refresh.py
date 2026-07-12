@@ -13,7 +13,10 @@ Notas importantes herdadas do pipeline original (ver SKILL.md / structures.md):
   - As queries SNAPSHOT e PREV_SNAPSHOT do queries.sql NÃO são usadas — o
     refresh_step3.py original já as derivava agregando DAILY_SNAPSHOT em
     Python (agg_daily). Replicado aqui do mesmo jeito.
-  - PREV_FUNNEL_GOOGLE/META não são recalculados — apenas preservados do HTML.
+  - PREV_FUNNEL_GOOGLE/META (fix 2026-07-12): recalculados a cada refresh, mesmas
+    janelas de prev_windows (alinhadas com FUNNEL_GOOGLE/META). Antes ficavam
+    congeladas com o que estivesse no HTML — comparação de leads/vendas "vs período
+    anterior" no dashboard ficava cada vez mais errada com o tempo.
   - FUNNEL_GOOGLE/META rodam 4x (janelas 7d/30d/90d/mês corrente).
   - label_map do FUNNEL_META usa DISTINCT id_mp_canon (armadilha crítica).
 """
@@ -318,22 +321,37 @@ def main():
         m_fim = next_m - timedelta(days=1)
         windows[mk] = (m_ini.isoformat(), m_fim.isoformat())
 
+    # janelas *_prev: mesmo tamanho de 7d/30d/90d, período imediatamente anterior.
+    # Alinhadas 1:1 com `windows` acima e recomputadas a cada refresh igual as demais
+    # (fix 2026-07-12: antes ficavam congeladas com o que estivesse no HTML — ver
+    # PREV_FUNNEL_GOOGLE/META mais abaixo).
+    prev_windows = {
+        "7d_prev": ((cutoff_dt - timedelta(days=13)).isoformat(), (cutoff_dt - timedelta(days=7)).isoformat()),
+        "30d_prev": ((cutoff_dt - timedelta(days=59)).isoformat(), (cutoff_dt - timedelta(days=30)).isoformat()),
+        "90d_prev": ((cutoff_dt - timedelta(days=179)).isoformat(), (cutoff_dt - timedelta(days=90)).isoformat()),
+    }
+
+    def fetch_funnel(pkey, d_ini, d_fim):
+        fg_sql = with_window(queries["FUNNEL_GOOGLE"], d_ini, d_fim).replace("{{CUTOFF}}", cutoff)
+        fg = [dict(normalize_fg_row(r), p_key=pkey) for r in run(f"FUNNEL_GOOGLE[{pkey}]", fg_sql)]
+        fm_sql = with_window(queries["FUNNEL_META"], d_ini, d_fim).replace("{{CUTOFF}}", cutoff)
+        fm = [dict(normalize_fm_row(r), p_key=pkey) for r in run(f"FUNNEL_META[{pkey}]", fm_sql)]
+        return fg, fm
+
     fresh_fg_all, fresh_fm_all = [], []
     for pkey, (d_ini, d_fim) in windows.items():
-        fg_sql = with_window(queries["FUNNEL_GOOGLE"], d_ini, d_fim).replace("{{CUTOFF}}", cutoff)
-        for r in run(f"FUNNEL_GOOGLE[{pkey}]", fg_sql):
-            r = normalize_fg_row(r)
-            r["p_key"] = pkey
-            fresh_fg_all.append(r)
-
-        fm_sql = with_window(queries["FUNNEL_META"], d_ini, d_fim).replace("{{CUTOFF}}", cutoff)
-        for r in run(f"FUNNEL_META[{pkey}]", fm_sql):
-            r = normalize_fm_row(r)
-            r["p_key"] = pkey
-            fresh_fm_all.append(r)
+        fg, fm = fetch_funnel(pkey, d_ini, d_fim)
+        fresh_fg_all.extend(fg)
+        fresh_fm_all.extend(fm)
 
     fresh_fg_month = [r for r in fresh_fg_all if r.get("p_key") == curr_month_key]
     fresh_fm_month = [r for r in fresh_fm_all if r.get("p_key") == curr_month_key]
+
+    fresh_prev_fg, fresh_prev_fm = [], []
+    for pkey, (d_ini, d_fim) in prev_windows.items():
+        fg, fm = fetch_funnel(pkey, d_ini, d_fim)
+        fresh_prev_fg.extend(fg)
+        fresh_prev_fm.extend(fm)
 
     # CREDIT_TIMESERIES
     credit_sql = queries["CREDIT_TIMESERIES"].replace("{{CUTOFF}}", cutoff)
@@ -368,14 +386,16 @@ def main():
 
     d = cutoff_dt
     curr_month_ini = date(d.year, d.month, 1).isoformat()
+    # Fix 2026-07-12: 7d/30d/90d aqui reusam `windows`/`prev_windows` (em vez de
+    # recalcular com tamanho próprio) — antes cobriam 8/31/91 dias enquanto
+    # FUNNEL_GOOGLE/META (mesmo period_key) cobriam 7/30/90, distorcendo CPL/CAC
+    # no dashboard (SNAPSHOT e FUNNEL_* são combinados pelo mesmo period_key).
     periods_snap = {
-        "7d": ((d - timedelta(days=7)).isoformat(), d.isoformat()),
-        "30d": ((d - timedelta(days=30)).isoformat(), d.isoformat()),
-        "90d": ((d - timedelta(days=90)).isoformat(), d.isoformat()),
+        "7d": windows["7d"],
+        "30d": windows["30d"],
+        "90d": windows["90d"],
         curr_month_key: (curr_month_ini, d.isoformat()),
-        "7d_prev": ((d - timedelta(days=14)).isoformat(), (d - timedelta(days=8)).isoformat()),
-        "30d_prev": ((d - timedelta(days=60)).isoformat(), (d - timedelta(days=31)).isoformat()),
-        "90d_prev": ((d - timedelta(days=180)).isoformat(), (d - timedelta(days=91)).isoformat()),
+        **prev_windows,
     }
     # Recomputar também todos os meses fechados presentes no HTML (mesma motivação
     # descrita em `windows` acima — não deixar mês antigo com foto do dia da virada).
@@ -406,9 +426,6 @@ def main():
     hist_fm = [r for r in existing_fm if r.get("p_key") not in refreshed_keys]
     full_fg = hist_fg + fresh_fg_all
     full_fm = hist_fm + fresh_fm_all
-
-    existing_prev_fg = extract_js_array(html, "PREV_FUNNEL_GOOGLE")
-    existing_prev_fm = extract_js_array(html, "PREV_FUNNEL_META")
 
     cutoff_70 = (cutoff_dt - timedelta(days=70)).isoformat()
 
@@ -455,8 +472,8 @@ def main():
     html = sub_array(html, "PREV_SNAPSHOT", prev_snap)
     html = sub_array(html, "FUNNEL_GOOGLE", full_fg)
     html = sub_array(html, "FUNNEL_META", full_fm)
-    html = sub_array(html, "PREV_FUNNEL_GOOGLE", existing_prev_fg)
-    html = sub_array(html, "PREV_FUNNEL_META", existing_prev_fm)
+    html = sub_array(html, "PREV_FUNNEL_GOOGLE", fresh_prev_fg)
+    html = sub_array(html, "PREV_FUNNEL_META", fresh_prev_fm)
     html = ensure_ds_partners(html)
     html = sub_array(html, "DAILY_SNAPSHOT", daily_compact)
     html = sub_array(html, "DAILY_FUNNEL", daily_funnel_compact)
