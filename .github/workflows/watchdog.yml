@@ -5,6 +5,9 @@ on:
     - cron: '0 17 * * 2'  # terça 14h BRT — 4h depois do refresh esperado (10h BRT)
   workflow_dispatch:
 
+permissions:
+  actions: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -28,15 +31,16 @@ jobs:
             exit 0
           fi
 
-          echo "::error::Refresh NÃO rodou hoje ($TODAY). Disparando alerta no Slack."
+          echo "::error::Refresh NÃO rodou hoje ($TODAY). Disparando alerta e fallback."
+
+          # Alerta no Slack primeiro (antes do dispatch, pra garantir que chega mesmo se dispatch falhar)
+          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            curl -s -X POST "$SLACK_WEBHOOK_URL" \
+              -H 'Content-Type: application/json' \
+              -d "{\"text\": \"${SLACK_MENTION} :warning: *Watchdog:* o refresh semanal do dashboard não rodou automaticamente hoje (${TODAY}). Disparando manualmente como fallback.\"}"
+            echo "Alerta enviado ao Slack."
+          fi
 
           # Dispara o refresh como fallback
           gh workflow run weekly-refresh.yml --repo "$REPO"
           echo "Refresh disparado via workflow_dispatch como fallback."
-
-          # Alerta no Slack
-          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
-            curl -s -X POST "$SLACK_WEBHOOK_URL" \
-              -H 'Content-Type: application/json' \
-              -d "{\"text\": \"${SLACK_MENTION} :warning: *Watchdog:* o refresh semanal do dashboard não rodou automaticamente hoje (${TODAY}). Disparei manualmente como fallback — verificar por que o cron do GitHub não funcionou.\"}"
-          fi

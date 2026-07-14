@@ -56,6 +56,7 @@ jobs:
             exit 0
           fi
           git commit -m "Refresh dashboard $(date -u +%F)"
+          git pull --rebase origin main
           git push
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
