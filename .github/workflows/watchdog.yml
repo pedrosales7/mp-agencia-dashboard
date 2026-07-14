@@ -1,0 +1,42 @@
+name: Watchdog — Refresh rodou?
+
+on:
+  schedule:
+    - cron: '0 17 * * 2'  # terça 14h BRT — 4h depois do refresh esperado (10h BRT)
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar se o refresh rodou hoje
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_MENTION: '<@U0753LAQU1F>'
+        run: |
+          set -euo pipefail
+
+          TODAY=$(date -u +%F)
+          REPO="${{ github.repository }}"
+
+          REFRESH_RAN=$(gh api "/repos/$REPO/actions/workflows/weekly-refresh.yml/runs?created=>=${TODAY}T00:00:00Z&per_page=10" \
+            --jq '[.workflow_runs[] | select(.conclusion=="success")] | length')
+
+          if [ "$REFRESH_RAN" -gt 0 ]; then
+            echo "Refresh rodou hoje ($REFRESH_RAN run(s) com sucesso). Tudo certo."
+            exit 0
+          fi
+
+          echo "::error::Refresh NÃO rodou hoje ($TODAY). Disparando alerta no Slack."
+
+          # Dispara o refresh como fallback
+          gh workflow run weekly-refresh.yml --repo "$REPO"
+          echo "Refresh disparado via workflow_dispatch como fallback."
+
+          # Alerta no Slack
+          if [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
+            curl -s -X POST "$SLACK_WEBHOOK_URL" \
+              -H 'Content-Type: application/json' \
+              -d "{\"text\": \"${SLACK_MENTION} :warning: *Watchdog:* o refresh semanal do dashboard não rodou automaticamente hoje (${TODAY}). Disparei manualmente como fallback — verificar por que o cron do GitHub não funcionou.\"}"
+          fi
