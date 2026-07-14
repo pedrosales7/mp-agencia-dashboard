@@ -113,10 +113,73 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
                          .get("investimento_bruto"))
                 v["cpc_estimado"] = _ratio(bruto, v["cliques"]) if bruto else None
 
+    # taxas de passagem entre etapas do meio de funil, calculadas AQUI pelo mesmo
+    # motivo do ctr/cpc: o LLM ignora "cheque a etapa X" quando só tem contagens
+    # brutas — precisa da taxa já pronta pra apontar o gargalo específico
+    # (em vez de cair sempre no diagnóstico genérico de cashback/CTR).
+    STAGE_DEFS = {
+        "google": (("cliques", "sessoes"), ("sessoes", "clickoff"),
+                   ("clickoff", "redirect"), ("redirect", "leads")),
+        "meta": (("cliques", "chat_start"), ("chat_start", "zip_search"),
+                 ("zip_search", "redirect"), ("redirect", "leads")),
+    }
+    for funil, canal in ((funil_google, "google"), (funil_meta, "meta")):
+        for per_window in funil.values():
+            for v in per_window.values():
+                taxas = {}
+                for de, para in STAGE_DEFS[canal]:
+                    label = f"{de}>{para}"
+                    taxas[label] = (round(100 * v[para] / v[de], 1)
+                                     if v.get(de) else None)
+                v["taxas_etapa"] = taxas
+
     # série semanal (últimas 8 semanas). Crédito/runway fica FORA do payload de
     # propósito (decisão do Pedro 2026-07-09): já existem alertas dedicados e,
     # se o dado estiver aqui, o modelo desvia o parecer pra isso.
     semanal = {p: rows[-8:] for p, rows in partner_weekly_dict.items() if p in valid_partners}
+
+    # tendência da série semanal calculada aqui — o LLM não extrai de forma
+    # confiável "tendência real vs ruído de 1 semana" de uma lista crua de 8
+    # números. direcao_8sem compara a média da 1ª metade com a da 2ª metade;
+    # semanas_estaveis_consecutivas conta quantas semanas recentes seguidas
+    # ficam dentro de ±15% da média das 8 — sinal de estagnação/fadiga (o
+    # padrão do exemplo "BOM" do prompt: "estável há 6 semanas").
+    def _trend_summary(rows, field):
+        vals = [r.get(field) or 0 for r in rows]
+        n = len(vals)
+        if n < 4:
+            return None
+        half = n // 2
+        first_avg = sum(vals[:half]) / half
+        second_avg = sum(vals[half:]) / (n - half)
+        delta_pct = round(100 * (second_avg - first_avg) / first_avg, 1) if first_avg else None
+        if delta_pct is None:
+            direcao = "sem_base"
+        elif delta_pct >= 15:
+            direcao = "alta"
+        elif delta_pct <= -15:
+            direcao = "queda"
+        else:
+            direcao = "estavel"
+        media_geral = sum(vals) / n
+        semanas_estaveis = 0
+        for v in reversed(vals):
+            if media_geral and abs(v - media_geral) / media_geral <= 0.15:
+                semanas_estaveis += 1
+            else:
+                break
+        return {
+            "direcao_8sem": direcao,
+            "variacao_pct_1a_vs_2a_metade": delta_pct,
+            "semanas_estaveis_consecutivas": semanas_estaveis,
+        }
+
+    tendencia_semanal = {}
+    for p, rows in semanal.items():
+        tendencia_semanal[p] = {
+            "leads": _trend_summary(rows, "leads"),
+            "vendas": _trend_summary(rows, "vendas"),
+        }
 
     # benchmark de pré-clique 30d — comparação com os pares calculada AQUI.
     # Sem isso o modelo ignora ctr/cpc mesmo com instrução explícita (testado
@@ -142,6 +205,51 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
                 entry["cpc_vs_pares_pct"] = round(100 * (w["cpc_estimado"] - media) / media, 1)
             benchmark.setdefault(id_mp, {})[canal] = entry
 
+    # gargalo_funil_30d: aponta a ETAPA mais fraca do meio de funil de cada
+    # partner×canal (vs a própria janela anterior e vs a média dos pares),
+    # já pré-selecionada — mesmo racional do benchmark_pre_clique_30d. Sem
+    # isso o modelo só cruza cashback/CTR (os únicos dados já mastigados) e
+    # nunca chega no diagnóstico de funil descrito em <como_pensar>.
+    gargalo_funil = {}
+    for canal, funil in (("google", funil_google), ("meta", funil_meta)):
+        stage_labels = [f"{de}>{para}" for de, para in STAGE_DEFS[canal]]
+        stats_30d = {id_mp: pw["30d"]["taxas_etapa"] for id_mp, pw in funil.items()
+                     if pw.get("30d", {}).get("taxas_etapa")}
+        for id_mp, taxas in stats_30d.items():
+            taxas_prev = funil[id_mp].get("30d_prev", {}).get("taxas_etapa", {})
+            pior_label, pior_desvio, pior_detalhe = None, None, None
+            for label in stage_labels:
+                taxa = taxas.get(label)
+                if taxa is None:
+                    continue
+                peers = [t[label] for k, t in stats_30d.items()
+                         if k != id_mp and t.get(label) is not None]
+                desvio_pares = None
+                if peers:
+                    media_pares = sum(peers) / len(peers)
+                    if media_pares:
+                        desvio_pares = round(100 * (taxa - media_pares) / media_pares, 1)
+                taxa_prev = taxas_prev.get(label)
+                delta_hist = (round(100 * (taxa - taxa_prev) / taxa_prev, 1)
+                              if taxa_prev else None)
+                # pior sinal = menor entre desvio vs pares e delta vs histórico
+                candidatos = [d for d in (desvio_pares, delta_hist) if d is not None]
+                if not candidatos:
+                    continue
+                pior_deste = min(candidatos)
+                if pior_desvio is None or pior_deste < pior_desvio:
+                    pior_desvio = pior_deste
+                    pior_label = label
+                    pior_detalhe = {
+                        "etapa": label, "taxa_30d_pct": taxa,
+                        "taxa_media_pares_pct": round(media_pares, 1) if peers else None,
+                        "desvio_vs_pares_pct": desvio_pares,
+                        "taxa_30d_prev_pct": taxa_prev,
+                        "delta_vs_historico_pct": delta_hist,
+                    }
+            if pior_detalhe:
+                gargalo_funil.setdefault(id_mp, {})[canal] = pior_detalhe
+
     return {
         "data_corte": cutoff_dt.isoformat(),
         "janelas": {k: {"inicio": v[0], "fim": v[1]} for k, v in windows.items()},
@@ -150,7 +258,9 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
         "funil_google_por_partner": funil_google,
         "funil_meta_por_partner": funil_meta,
         "serie_semanal_por_partner": semanal,
+        "tendencia_semanal_por_partner": tendencia_semanal,
         "benchmark_pre_clique_30d": benchmark,
+        "gargalo_funil_30d": gargalo_funil,
     }
 
 
@@ -192,6 +302,14 @@ Não recalcule nem reinterprete:
 - ctr_pct = cliques / impressões (%). cpc_estimado = investimento bruto / cliques — é ESTIMADO:
   investimento vem do sistema financeiro e cliques da plataforma de ads, bases diferentes do
   gerenciador. Use para tendência e comparação entre janelas, não para auditar o valor absoluto.
+- taxas_etapa (dentro de cada janela de funil): taxa de passagem (%) entre cada par de etapas
+  consecutivas (ex.: "sessoes>clickoff"). Já vem calculada — não recalcule a partir das contagens.
+- gargalo_funil_30d: a ETAPA do meio de funil já identificada como mais fraca de cada
+  partner×canal em 30d (maior desvio negativo vs pares OU vs a própria janela anterior). Este é
+  o ponto de partida do diagnóstico de funil — veja <como_pensar>.
+- tendencia_semanal_por_partner: direção da série de 8 semanas (alta/queda/estavel, comparando
+  1ª metade com 2ª metade) e há quantas semanas seguidas o valor está estável (dentro de ±15%
+  da média das 8). Use isso pra dizer "há N semanas", não invente esse número.
 - Valores monetários em R$ (BRL).
 </definicoes_fixas>
 
@@ -226,18 +344,29 @@ Não recalcule nem reinterprete:
 </cuidados_de_leitura>
 
 <como_pensar>
-Antes de escrever, monte internamente o quadro de cada partner:
-- A conta está saudável, estagnada ou em deterioração? O que na série de 8 semanas sustenta isso —
-  é tendência ou ruído de uma semana?
-- Qual é O problema (ou A oportunidade) número 1 desta conta agora?
-- O bloco benchmark_pre_clique_30d já traz a comparação de CTR e CPC de cada conta com a média
-  dos outros partners no mesmo canal (ctr_vs_pares_pct / cpc_vs_pares_pct). Desvio de 30% ou mais
-  DEVE aparecer no parecer com diagnóstico: CTR muito abaixo dos pares = criativo/segmentação;
-  CPC muito acima = leilão/qualidade do anúncio. Pré-clique saudável = diga onde trava depois.
+Antes de escrever, monte internamente o quadro de cada partner — NESTA ORDEM (não pule etapas):
+
+1. Abra por gargalo_funil_30d e tendencia_semanal_por_partner primeiro. gargalo_funil_30d já
+   aponta a etapa mais fraca do meio de funil (google: sessoes>clickoff, clickoff>redirect,
+   redirect>leads; meta: chat_start>zip_search, zip_search>redirect, redirect>leads) — é o
+   diagnóstico mais específico e acionável que existe no payload, e o que o time de mídia
+   consegue agir mais rápido (ajuste de landing, oferta, fricção do bot). Comece a análise por
+   aqui, não pelo cashback.
+2. Só depois olhe benchmark_pre_clique_30d (CTR/CPC vs pares). Desvio de 30% ou mais DEVE
+   aparecer no parecer: CTR muito abaixo dos pares = criativo/segmentação; CPC muito acima =
+   leilão/qualidade do anúncio.
+3. Cashback (pct_cashback) entra como explicação SÓ quando o gargalo apontado for pré-clique
+   (CTR/CPC) ou quando pct_cashback subiu vs a janela anterior — cashback alto sozinho, sem
+   subida, é contexto, não é a manchete do parecer.
+4. Use tendencia_semanal_por_partner pra dizer HÁ QUANTAS SEMANAS o padrão se repete
+   (semanas_estaveis_consecutivas) em vez de citar só o valor da janela atual — isso é o que
+   separa tendência real de ruído de uma semana.
+5. A conta está saudável, estagnada ou em deterioração? Qual é O problema (ou A oportunidade)
+   número 1 desta conta agora — response a essa pergunta deve vir do gargalo mais forte
+   encontrado nos passos 1-3, não de um template fixo.
 - Cruze sinais que uma tabela não cruza: canais divergindo no mesmo partner (demanda existe, canal
   falha?); etapas contando histórias contraditórias; pct_cashback vs segmentação geográfica;
-  pré-clique (impressões, ctr_pct, cpc_estimado) vs meio de funil; eficiência relativa vs os
-  outros partners no mesmo canal.
+  pré-clique vs meio de funil; eficiência relativa vs os outros partners no mesmo canal.
 - Formule hipóteses de causa raiz e rotule como [hipótese], dizendo como validar cada uma.
 - Se esta conta fosse sua, o que você mudaria ESTA semana?
 
@@ -257,11 +386,15 @@ Padrões de diagnóstico úteis:
 
 <o_que_nao_fazer>
 - NÃO recite variações numéricas ("leads +28%, CPL R$ 62 (-18%), CAC +5%..."). O dashboard mostra
-  isso melhor que você. Cite no máximo os 2-3 números que SUSTENTAM cada conclusão.
+  isso melhor que você. LIMITE DURO: no máximo 3 números por parecer, no máximo 1 casa decimal
+  cada. Se o rascunho interno tem mais de 3, corte os mais fracos antes de escrever a versão final.
 - NÃO escreva frase que não contenha diagnóstico, hipótese, risco, oportunidade ou decisão. Teste:
   se a frase não muda nenhuma decisão do leitor, corte.
 - NÃO use a mesma estrutura mecânica para todos os partners — template preenchido é relatório morto.
-  Cada parecer segue a história daquela conta.
+  Cada parecer segue a história daquela conta. Teste concreto: releia os 8 pareceres antes de
+  finalizar — se mais de 2 deles abrem citando cashback ou CTR/CPC como primeiro sinal, você
+  ignorou gargalo_funil_30d e está caindo no padrão fácil. Reescreva puxando o gargalo de funil
+  (ou outro sinal) como abertura desses casos.
 - NÃO subdivida cada partner em "Google:" / "Meta:" com lista de métricas; canal entra na narrativa
   quando for relevante para o diagnóstico.
 - NÃO hedge ("pode ser interessante avaliar..."). Posicione-se: "faça X porque Y".
@@ -287,9 +420,10 @@ antes de escrever. Produza:
    conta exige ação urgente e por quê, e a decisão mais importante da semana (30d vs 30d_prev e
    série semanal separam tendência de ruído).
 2. PARECER POR PARTNER — para CADA um dos 8 partners, um parecer de 3 a 5 frases: situação em uma
-   frase; diagnóstico do que explica a performance (cruzando canais, etapas do funil — inclusive
-   pré-clique via impressões/ctr_pct/cpc_estimado quando o gargalo estiver lá —, cashback e
-   histórico); hipótese de causa raiz rotulada [hipótese] com forma de validação; ação da semana.
+   frase; diagnóstico do que explica a performance, começando por gargalo_funil_30d (a etapa mais
+   fraca já identificada) e só recorrendo a pré-clique (ctr_pct/cpc_estimado) ou cashback quando
+   fizerem mais sentido pro caso; use tendencia_semanal_por_partner pra ancorar tendência vs
+   ruído; hipótese de causa raiz rotulada [hipótese] com forma de validação; ação da semana.
    Partner sem investimento/atividade = 1 linha dizendo isso e o que verificar. Nunca omita um
    partner.
 3. RECOMENDAÇÕES PARA A EQUIPE DE MÍDIA — 3 a 6 ações concretas, priorizadas por impacto,
