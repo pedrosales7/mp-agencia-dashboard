@@ -2,7 +2,7 @@ name: Watchdog — Refresh rodou?
 
 on:
   schedule:
-    - cron: '0 17 * * 2'  # terça 14h BRT — 4h depois do refresh esperado (10h BRT)
+    - cron: '43 13 * * 2'  # terça 10:43 BRT — 2h+ depois do refresh esperado (8:37 BRT)
   workflow_dispatch:
 
 permissions:

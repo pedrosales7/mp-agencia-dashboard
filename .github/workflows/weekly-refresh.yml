@@ -2,7 +2,7 @@ name: Weekly Dashboard Refresh
 
 on:
   schedule:
-    - cron: '0 13 * * 2'  # toda terça, 10:00 BRT (UTC-3, sem horário de verão)
+    - cron: '37 11 * * 2'  # toda terça, 8:37 BRT (UTC-3)
   workflow_dispatch:
     inputs:
       test_mode:
