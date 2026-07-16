@@ -114,6 +114,28 @@ def with_window(sql, d_ini, d_fim):
     return new_sql
 
 
+PT_MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+def month_label(mk):
+    y, m = mk.split("-")
+    return f"{PT_MONTHS[int(m) - 1]}/{y[2:]}"
+
+
+def build_month_select(html, month_keys):
+    """Regenera as <option> do dropdown de mês, incluindo o mês corrente —
+    sem isso, na virada do mês o mês novo nunca aparecia na seleção (só era
+    adicionado manualmente à mão)."""
+    options = ['<option value="">Mês…</option>']
+    for mk in sorted(month_keys, reverse=True):
+        options.append(f'<option value="{mk}">{month_label(mk)}</option>')
+    options_html = "\n      ".join(options)
+    return re.sub(
+        r'<select id="month-select" class="filter-select">.*?</select>',
+        f'<select id="month-select" class="filter-select">\n      {options_html}\n    </select>',
+        html, count=1, flags=re.DOTALL)
+
+
 # ── helpers portados do refresh_step3.py original ───────────────────────
 
 def norm_date(d):
@@ -475,6 +497,7 @@ def main():
     html = sub_array(html, "PREV_FUNNEL_GOOGLE", fresh_prev_fg)
     html = sub_array(html, "PREV_FUNNEL_META", fresh_prev_fm)
     html = ensure_ds_partners(html)
+    html = build_month_select(html, existing_month_keys | {curr_month_key})
     html = sub_array(html, "DAILY_SNAPSHOT", daily_compact)
     html = sub_array(html, "DAILY_FUNNEL", daily_funnel_compact)
     html = sub_obj(html, "PARTNER_WEEKLY", partner_weekly_dict)
