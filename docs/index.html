@@ -352,10 +352,10 @@ function deltaSpan(curr, prev, semantic) {
   if (curr == null || prev == null || !isFinite(curr) || !isFinite(prev) || prev === 0) return '';
   const d = (curr - prev) / Math.abs(prev);
   if (Math.abs(d) < 0.005) return `<span class="cell-delta flat">· 0%</span>`;
-  const goodIfUp = semantic !== 'down_good';
   const isUp = d > 0;
-  const cls = (isUp === goodIfUp) ? 'up' : 'down';
   const arrow = isUp ? '▲' : '▼';
+  // 'neutral': variação de investimento não é boa nem ruim por si só (ex. Bruto/Cashback/Líquido) — sempre cinza.
+  const cls = semantic === 'neutral' ? 'flat' : (isUp === (semantic !== 'down_good') ? 'up' : 'down');
   return `<span class="cell-delta ${cls}">${arrow} ${(d*100).toFixed(0)}%</span>`;
 }
 
@@ -705,22 +705,21 @@ function renderFunnelGoogle() {
     const clsConvFinal      = eligible                   ? outlierClass(convFinal,                medConvFinal,        'rate') : '';
     const clsCac            = eligible && cac != null    ? outlierClass(cac,                      medCac,              'cost') : '';
     const clsCpl            = eligible && cpl != null && r.leads >= 3 ? outlierClass(cpl,         medCpl,              'cost') : '';
+    const pg = findPrevGoogle(r.id_mp), pc = findPrevCosts(r.id_mp, 'google');
+    const pCpc = (pg && pc) ? safeDiv(pc.bruto, pg.cliques) : null;
     html += '<tr>'
       + `<td class="partner-cell">${r.id_mp}</td>`
-      + `<td class="num"><span class="cell-volume">${fmtBRL(r.bruto)}</span></td>`
-      + `<td class="num"><span class="cell-volume">${fmtBRL(r.cashback)}</span></td>`
-      + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span></td>`
-      + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL2(cpc)}</span></td>`
-      + (() => { const pg = findPrevGoogle(r.id_mp); return ''
-          + funnelCell(r.cliques, null, '', pg?.cliques)
-          + funnelCell(r.sessoes, r.cliques, clsSessoes, pg?.sessoes)
-          + funnelCell(r.clickoff, r.sessoes, clsClickoff, pg?.clickoff)
-          + funnelCell(r.redirect, r.clickoff, clsRedirect, pg?.redirect)
-          + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pg?.leads)
-          + funnelCell(r.vendas, r.leads, clsVendasLeads, pg?.vendas);
-        })()
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.bruto)}</span>${deltaSpan(r.bruto, pc?.bruto, 'neutral')}</td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.cashback)}</span>${deltaSpan(r.cashback, pc?.cashback, 'neutral')}</td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span>${deltaSpan(r.liquido, pc?.liquido, 'neutral')}</td>`
+      + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL2(cpc)}</span>${deltaSpan(cpc, pCpc, 'down_good')}</td>`
+      + funnelCell(r.cliques, null, '', pg?.cliques)
+      + funnelCell(r.sessoes, r.cliques, clsSessoes, pg?.sessoes)
+      + funnelCell(r.clickoff, r.sessoes, clsClickoff, pg?.clickoff)
+      + funnelCell(r.redirect, r.clickoff, clsRedirect, pg?.redirect)
+      + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pg?.leads)
+      + funnelCell(r.vendas, r.leads, clsVendasLeads, pg?.vendas)
       + (() => {
-          const pg = findPrevGoogle(r.id_mp), pc = findPrevCosts(r.id_mp, 'google');
           const pCpl = (pg && pc) ? safeDiv(pc.liquido, pg.leads) : null;
           const pCac = (pg && pc) ? safeDiv(pc.liquido, pg.vendas) : null;
           const pConv = pg ? safeDiv(pg.vendas, pg.cliques) : null;
@@ -820,22 +819,21 @@ function renderFunnelMeta() {
     const clsConvFinal      = eligible                     ? outlierClass(convFinal,                   medConvFinal,     'rate') : '';
     const clsCac            = eligible && cac != null      ? outlierClass(cac,                         medCac,           'cost') : '';
     const clsCpl            = eligible && cpl != null && r.leads >= 3 ? outlierClass(cpl,              medCpl,           'cost') : '';
+    const pm = findPrevMeta(r.id_mp), pc = findPrevCosts(r.id_mp, 'meta');
+    const pCpc = (pm && pc) ? safeDiv(pc.bruto, pm.cliques) : null;
     html += '<tr>'
       + `<td class="partner-cell">${r.id_mp}</td>`
-      + `<td class="num"><span class="cell-volume">${fmtBRL(r.bruto)}</span></td>`
-      + `<td class="num"><span class="cell-volume">${fmtBRL(r.cashback)}</span></td>`
-      + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span></td>`
-      + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL2(cpc)}</span></td>`
-      + (() => { const pm = findPrevMeta(r.id_mp); return ''
-          + funnelCell(r.cliques, null, '', pm?.cliques)
-          + funnelCell(r.chat_start, r.cliques, clsChat, pm?.chat_start)
-          + funnelCell(r.zip_search, r.chat_start, clsZip, pm?.zip_search)
-          + funnelCell(r.redirect, r.zip_search, clsRedirect, pm?.redirect)
-          + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pm?.leads)
-          + funnelCell(r.vendas, r.leads, clsVendasLeads, pm?.vendas);
-        })()
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.bruto)}</span>${deltaSpan(r.bruto, pc?.bruto, 'neutral')}</td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.cashback)}</span>${deltaSpan(r.cashback, pc?.cashback, 'neutral')}</td>`
+      + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span>${deltaSpan(r.liquido, pc?.liquido, 'neutral')}</td>`
+      + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL2(cpc)}</span>${deltaSpan(cpc, pCpc, 'down_good')}</td>`
+      + funnelCell(r.cliques, null, '', pm?.cliques)
+      + funnelCell(r.chat_start, r.cliques, clsChat, pm?.chat_start)
+      + funnelCell(r.zip_search, r.chat_start, clsZip, pm?.zip_search)
+      + funnelCell(r.redirect, r.zip_search, clsRedirect, pm?.redirect)
+      + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pm?.leads)
+      + funnelCell(r.vendas, r.leads, clsVendasLeads, pm?.vendas)
       + (() => {
-          const pm = findPrevMeta(r.id_mp), pc = findPrevCosts(r.id_mp, 'meta');
           const pCpl = (pm && pc) ? safeDiv(pc.liquido, pm.leads) : null;
           const pCac = (pm && pc) ? safeDiv(pc.liquido, pm.vendas) : null;
           const pConv = pm ? safeDiv(pm.vendas, pm.cliques) : null;
