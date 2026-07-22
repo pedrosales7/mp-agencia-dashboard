@@ -28,8 +28,11 @@ h1 { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
 select.filter-select { padding: 6px 28px 6px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font-size: 13px; cursor: pointer; appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%2371717a' d='M0 0l5 6 5-6z'/></svg>"); background-repeat: no-repeat; background-position: right 10px center; }
 select.filter-select:hover { border-color: var(--muted); }
 select.filter-select[data-active="true"] { background-color: var(--accent); color: white; border-color: var(--accent); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='white' d='M0 0l5 6 5-6z'/></svg>"); }
-.custom-date-group { display: inline-flex; align-items: center; gap: 6px; }
+.custom-date-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 input[type="date"].filter-select { padding: 5px 10px; }
+/* Só fica destacado quando o período customizado é de fato o filtro em uso — não só quando
+   tem data preenchida (evita parecer "ativo" com data de sessão anterior). */
+.custom-date-group[data-active="true"] input[type="date"].filter-select { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
 .partner-multiselect { position: relative; display: inline-block; }
 .partner-ms-toggle { border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); font-size: 13px; cursor: pointer; padding: 6px 12px; }
 .partner-ms-toggle:hover { background: #f4f4f5; }
@@ -142,6 +145,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
       <span style="color:var(--muted);font-size:12px;">até</span>
       <input type="date" id="custom-date-end" class="filter-select" style="padding:6px 10px;" title="Data final (personalizado)">
     </span>
+    <span id="custom-date-error" style="display:none;color:var(--danger);font-size:12px;">Data inicial precisa ser antes (ou igual) da data final.</span>
   </div>
   <div class="filter-group">
     <label>Canal</label>
@@ -516,7 +520,10 @@ function customWindowDays() {
   return Math.round((b - a) / 86400000) + 1;
 }
 function isCustomActive() {
-  return state.period === 'custom' && !!state.customStart && !!state.customEnd;
+  // start > end (data invertida) nunca é um período válido, mesmo que tenha ficado
+  // salvo assim de uma sessão anterior — sem isso a "janela" vira negativa e some dado
+  // silenciosamente, sem qualquer aviso.
+  return state.period === 'custom' && !!state.customStart && !!state.customEnd && state.customStart <= state.customEnd;
 }
 function customPrevWindowBounds() {
   // Janela anterior = mesmo tamanho do período customizado, imediatamente antes dele.
@@ -709,7 +716,7 @@ function renderFunnelGoogle() {
   const sortRef = state.sortGoogle;
   // cpl/cac/conv_final são calculados aqui (antes do sort) pra poderem ser usados como sortKey —
   // reaproveitados no loop de render abaixo pra não recalcular com valor divergente.
-  const rows = (state.period === 'custom' ? googleFunnelCustom() : googleFunnel()).map(r => ({
+  const rows = (isCustomActive() ? googleFunnelCustom() : googleFunnel()).map(r => ({
     ...r, cpl: safeDiv(r.liquido, r.leads), cac: safeDiv(r.liquido, r.vendas), conv_final: safeDiv(r.vendas, r.cliques),
   })).sort((a,b) => {
     const av = a[sortRef.key]; const bv = b[sortRef.key];
@@ -830,7 +837,7 @@ function renderFunnelMeta() {
   const sortRef = state.sortMeta;
   // cpl/cac/conv_final são calculados aqui (antes do sort) pra poderem ser usados como sortKey —
   // reaproveitados no loop de render abaixo pra não recalcular com valor divergente.
-  const rows = (state.period === 'custom' ? metaFunnelCustom() : metaFunnel()).map(r => ({
+  const rows = (isCustomActive() ? metaFunnelCustom() : metaFunnel()).map(r => ({
     ...r, cpl: safeDiv(r.liquido, r.leads), cac: safeDiv(r.liquido, r.vendas), conv_final: safeDiv(r.vendas, r.cliques),
   })).sort((a,b) => {
     const av = a[sortRef.key]; const bv = b[sortRef.key];
@@ -1504,6 +1511,17 @@ function renderTrendChart() {
   });
 }
 
+// Período personalizado: valida o intervalo e só destaca os campos como "ativos" quando o
+// período customizado é de fato o filtro em uso — evita a data de uma sessão anterior
+// (que fica salva no localStorage) parecer aplicada quando na verdade outro período está ativo.
+function updateCustomDateState() {
+  const group = document.getElementById('custom-date-group');
+  const errEl = document.getElementById('custom-date-error');
+  const bothFilled = !!(state.customStart && state.customEnd);
+  const invalidRange = bothFilled && state.customStart > state.customEnd;
+  errEl.style.display = invalidRange ? '' : 'none';
+  group.dataset.active = (state.period === 'custom' && bothFilled && !invalidRange) ? 'true' : 'false';
+}
 function wireFilters() {
   // Botões cumulativos (7d/30d/90d) — limpam o dropdown de mês
   document.querySelectorAll('#period-group button').forEach(b => {
@@ -1515,6 +1533,7 @@ function wireFilters() {
       const sel = document.getElementById('month-select');
       sel.value = '';
       sel.dataset.active = 'false';
+      updateCustomDateState();
       render();
     });
   });
@@ -1526,6 +1545,7 @@ function wireFilters() {
     state.period = v;
     localStorage.setItem(LS_PERIOD, state.period);
     e.target.dataset.active = 'true';
+    updateCustomDateState();
     render();
   });
   // Período personalizado (2 inputs de data)
@@ -1536,14 +1556,17 @@ function wireFilters() {
     state.customEnd = endEl.value || '';
     localStorage.setItem(LS_CUSTOM_START, state.customStart);
     localStorage.setItem(LS_CUSTOM_END, state.customEnd);
-    if (state.customStart && state.customEnd) {
+    const bothFilled = state.customStart && state.customEnd;
+    const invalidRange = bothFilled && state.customStart > state.customEnd;
+    if (bothFilled && !invalidRange) {
       document.querySelectorAll('#period-group button').forEach(x => x.removeAttribute('aria-pressed'));
       document.getElementById('month-select').value = '';
       document.getElementById('month-select').dataset.active = 'false';
       state.period = 'custom';
       localStorage.setItem(LS_PERIOD, state.period);
-      render();
     }
+    updateCustomDateState();
+    if (bothFilled && !invalidRange) render();
   }
   document.getElementById('custom-date-start').addEventListener('change', handleCustomDateChange);
   document.getElementById('custom-date-end').addEventListener('change', handleCustomDateChange);
@@ -1670,6 +1693,7 @@ function applyStoredSelections() {
   monthSel.dataset.active = isMonthPeriod ? 'true' : 'false';
   document.getElementById('custom-date-start').value = state.customStart || '';
   document.getElementById('custom-date-end').value = state.customEnd || '';
+  updateCustomDateState();
   document.querySelectorAll('#canal-group button').forEach(b => {
     b.removeAttribute('aria-pressed');
     if (b.dataset.canal === state.canal) b.setAttribute('aria-pressed', 'true');
