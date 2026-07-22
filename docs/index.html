@@ -392,6 +392,18 @@ function deltaSpan(curr, prev, semantic) {
   const cls = semantic === 'neutral' ? 'flat' : (isUp === (semantic !== 'down_good') ? 'up' : 'down');
   return `<span class="cell-delta ${cls}">${arrow} ${(d*100).toFixed(0)}%</span>`;
 }
+// delta em pontos percentuais — pra indicadores de taxa (ex. Sessões/Cliques), onde comparar
+// a variação do volume absoluto confunde com a variação da própria taxa de conversão.
+function deltaSpanRate(curr, prev, semantic) {
+  if (!state.compare) return '';
+  if (curr == null || prev == null || !isFinite(curr) || !isFinite(prev)) return '';
+  const diffPP = (curr - prev) * 100;
+  if (Math.abs(diffPP) < 0.05) return `<span class="cell-delta flat">· 0,0pp</span>`;
+  const isUp = diffPP > 0;
+  const arrow = isUp ? '▲' : '▼';
+  const cls = semantic === 'neutral' ? 'flat' : (isUp === (semantic !== 'down_good') ? 'up' : 'down');
+  return `<span class="cell-delta ${cls}">${arrow} ${Math.abs(diffPP).toFixed(1)}pp</span>`;
+}
 
 // ─────────── HELPERS ───────────
 function fmtBRL(v) { return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }); }
@@ -681,10 +693,16 @@ function renderChartTime() {
   });
 }
 
-function funnelCell(value, prevValue, outlierCls, prevAbsValue) {
+function funnelCell(value, prevValue, outlierCls, prevAbsValue, prevDenValue) {
   const conv = prevValue ? value / prevValue : null;
   const cls = outlierCls ? ' ' + outlierCls : '';
-  return `<td class="num${cls}"><span class="cell-volume">${fmtNum(value)}</span>${prevValue ? `<span class="cell-conv">${fmtPct(conv)}</span>` : ''}${deltaSpan(value, prevAbsValue, 'up_good')}</td>`;
+  // Colunas com denominador (conv != null) são indicadores de taxa de conversão — o delta
+  // compara a taxa deste período com a do período anterior (pp), não o volume absoluto.
+  // Cliques (sem denominador) continua comparando volume, que é o que faz sentido pra ele.
+  const delta = prevValue
+    ? deltaSpanRate(conv, (prevDenValue) ? safeDiv(prevAbsValue, prevDenValue) : null, 'up_good')
+    : deltaSpan(value, prevAbsValue, 'up_good');
+  return `<td class="num${cls}"><span class="cell-volume">${fmtNum(value)}</span>${prevValue ? `<span class="cell-conv">${fmtPct(conv)}</span>` : ''}${delta}</td>`;
 }
 
 function renderFunnelGoogle() {
@@ -756,11 +774,11 @@ function renderFunnelGoogle() {
       + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span>${deltaSpan(r.liquido, pc?.liquido, 'neutral')}</td>`
       + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL2(cpc)}</span>${deltaSpan(cpc, pCpc, 'down_good')}</td>`
       + funnelCell(r.cliques, null, '', pg?.cliques)
-      + funnelCell(r.sessoes, r.cliques, clsSessoes, pg?.sessoes)
-      + funnelCell(r.clickoff, r.sessoes, clsClickoff, pg?.clickoff)
-      + funnelCell(r.redirect, r.clickoff, clsRedirect, pg?.redirect)
-      + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pg?.leads)
-      + funnelCell(r.vendas, r.leads, clsVendasLeads, pg?.vendas)
+      + funnelCell(r.sessoes, r.cliques, clsSessoes, pg?.sessoes, pg?.cliques)
+      + funnelCell(r.clickoff, r.sessoes, clsClickoff, pg?.clickoff, pg?.sessoes)
+      + funnelCell(r.redirect, r.clickoff, clsRedirect, pg?.redirect, pg?.clickoff)
+      + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pg?.leads, pg?.redirect)
+      + funnelCell(r.vendas, r.leads, clsVendasLeads, pg?.vendas, pg?.leads)
       + (() => {
           const pCpl = (pg && pc) ? safeDiv(pc.liquido, pg.leads) : null;
           const pCac = (pg && pc) ? safeDiv(pc.liquido, pg.vendas) : null;
@@ -877,11 +895,11 @@ function renderFunnelMeta() {
       + `<td class="num"><span class="cell-volume">${fmtBRL(r.liquido)}</span>${deltaSpan(r.liquido, pc?.liquido, 'neutral')}</td>`
       + `<td class="num"><span class="cell-volume">${cpc == null ? '—' : fmtBRL2(cpc)}</span>${deltaSpan(cpc, pCpc, 'down_good')}</td>`
       + funnelCell(r.cliques, null, '', pm?.cliques)
-      + funnelCell(r.chat_start, r.cliques, clsChat, pm?.chat_start)
-      + funnelCell(r.zip_search, r.chat_start, clsZip, pm?.zip_search)
-      + funnelCell(r.redirect, r.zip_search, clsRedirect, pm?.redirect)
-      + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pm?.leads)
-      + funnelCell(r.vendas, r.leads, clsVendasLeads, pm?.vendas)
+      + funnelCell(r.chat_start, r.cliques, clsChat, pm?.chat_start, pm?.cliques)
+      + funnelCell(r.zip_search, r.chat_start, clsZip, pm?.zip_search, pm?.chat_start)
+      + funnelCell(r.redirect, r.zip_search, clsRedirect, pm?.redirect, pm?.zip_search)
+      + funnelCell(r.leads, r.redirect, clsLeadsRedirect, pm?.leads, pm?.redirect)
+      + funnelCell(r.vendas, r.leads, clsVendasLeads, pm?.vendas, pm?.leads)
       + (() => {
           const pCpl = (pm && pc) ? safeDiv(pc.liquido, pm.leads) : null;
           const pCac = (pm && pc) ? safeDiv(pc.liquido, pm.vendas) : null;
