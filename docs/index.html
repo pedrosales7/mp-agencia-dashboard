@@ -254,11 +254,6 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 </div>
 
 
-<div class="section">
-  <h2>% do Crédito Consumido por Parceiro<span class="tip">i<span class="tip-content"><strong>% consumido = (total_credit − credit_remaining) / total_credit</strong>, calculado a partir de <code>credit_remaining</code> em <code>performance_partner_mp_agency</code>, agregado por semana × partnership_id. <strong>Cada ponto no gráfico é a média do saldo diário na semana</strong>, não o valor no último dia dela.<br><br>Mostra o quanto do crédito de mídia de cada parceiro já foi consumido, normalizado — assim partners com crédito total bem diferente (ex. R$5 mil vs. R$90 mil) ficam comparáveis na mesma escala de 0-100%. Antes o gráfico mostrava o saldo em R$ absoluto, o que achatava parceiros pequenos perto de zero ao lado dos grandes.<br><br>Cada queda indica recarga (reset do consumo); a subida gradual reflete o gasto diário.<br><br><strong>Acima de 100%</strong>: o partner gastou mais do que tinha de crédito ativo no período — pode ser política de adiantamento ou ajuste retroativo do MP.<br><br>Filtros de canal/período não se aplicam aqui (a métrica é por parceiro, agregada) — o filtro de Partner continua valendo.</span></span></h2>
-  <div class="chart-container" style="height:320px"><canvas id="chart-time"></canvas></div>
-  <div class="note">Cores fixas por parceiro. Use o filtro <strong>Partner</strong> no topo pra isolar uma linha. Clique na legenda do Chart pra ocultar/exibir.</div>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
 
@@ -595,7 +590,6 @@ function aggByDate(rows) {
 }
 
 // ─────────── RENDER ───────────
-let chartTime = null;
 let chartMetricInstance = null; // TESTE: gráfico de métricas ao longo do tempo (Evolução de métricas)
 
 function rowsForPeriodPrev() {
@@ -654,51 +648,6 @@ const PARTNER_COLORS = {
   "ultranet-network":    "#db2777",
   "ativa-telecom":       "#64748b",
 };
-function renderChartTime() {
-  const ctx = document.getElementById('chart-time');
-  // União de todos os dias presentes
-  const allDays = new Set();
-  Object.values(CREDIT_TIMESERIES).forEach(arr => arr.forEach(r => allDays.add(r.dia)));
-  const labels = Array.from(allDays).sort();
-  // Aplicar filtro de partner se setado
-  const partners = Object.keys(CREDIT_TIMESERIES).filter(p => partnerMatch(p));
-  const datasets = partners.map(p => {
-    const series = CREDIT_TIMESERIES[p];
-    // % consumido, não R$ remanescente — em R$ absoluto, parceiro com crédito total pequeno (ex. 5k)
-    // vira uma linha achatada perto de zero ao lado de um com 90k, mesmo consumindo no mesmo ritmo.
-    // Normalizado por total, os 8 partners ficam comparáveis na mesma escala 0-100%.
-    const byDay = new Map(series.map(r => [r.dia, safeDiv(r.total - r.credito, r.total)]));
-    return {
-      label: p,
-      data: labels.map(d => byDay.has(d) ? byDay.get(d) : null),
-      borderColor: PARTNER_COLORS[p] || '#64748b',
-      backgroundColor: PARTNER_COLORS[p] || '#64748b',
-      borderWidth: 2,
-      pointRadius: 0,
-      pointHoverRadius: 4,
-      tension: 0.2,
-      spanGaps: true,
-    };
-  });
-  if (chartTime) chartTime.destroy();
-  chartTime = new Chart(ctx, {
-    type: 'line',
-    data: { labels: labels.map(d => d.slice(5)), datasets },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      scales: {
-        y: { beginAtZero: true, title: { display: true, text: '% do crédito consumido' }, grid: { color: '#f4f4f5' }, ticks: { callback: (v) => fmtPct(v) } },
-        x: { ticks: { autoSkip: true, maxTicksLimit: 14 } }
-      },
-      plugins: {
-        legend: { position: 'top', align: 'end', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } },
-        tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + (c.parsed.y == null ? '—' : fmtPct(c.parsed.y)) } }
-      }
-    }
-  });
-}
-
 function funnelCell(value, prevValue, outlierCls, prevAbsValue, prevDenValue) {
   const conv = prevValue ? value / prevValue : null;
   const cls = outlierCls ? ' ' + outlierCls : '';
@@ -1049,7 +998,7 @@ function render() {
   renderCoverage();
   renderProgressao();
   renderTaxas();
-  if (typeof Chart !== 'undefined') { renderChartTime(); renderTrendChart(); }
+  if (typeof Chart !== 'undefined') renderTrendChart();
 }
 
 // ─────────── Progressão por Partner ───────────
