@@ -45,7 +45,7 @@ input[type="date"].filter-select { padding: 5px 10px; }
 
 .refresh-btn { margin-left: auto; padding: 6px 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; border-radius: 8px; font-size: 13px; }
 .refresh-btn:hover { background: #f4f4f5; }
-.kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpis { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 20px; }
 .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
 .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-weight: 500; margin-bottom: 6px; }
 .kpi-value { font-size: 22px; font-weight: 500; line-height: 1.1; }
@@ -171,6 +171,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 <div class="kpis">
   <div class="kpi"><div class="kpi-label">Investimento líquido<span class="tip">i<span class="tip-content"><strong>Líquido = Bruto − Cashback</strong><br>Fonte: <code>midia_paga.performance_partner_mp_agency</code><br>• <code>bruto</code> = SUM(<code>raw_investment</code>)<br>• <code>cashback</code> = SUM(<code>cashback</code>)<br>• <code>liquido</code> = SUM(<code>partnership_net_daily_spend</code>)<br>Filtro: <code>source IN ('google','meta')</code> agregado por (partnership_id × período).</span></span></div><div class="kpi-value" id="kpi-invest">—</div><div class="kpi-sub" id="kpi-invest-sub">&nbsp;</div></div>
+  <div class="kpi"><div class="kpi-label">Cashback<span class="tip">i<span class="tip-content"><strong>Cashback</strong> = parte do investimento bruto que não fica com o anunciante (lead/redirect caiu fora da cobertura dele e voltou pra Melhor Plano).<br><br>Fonte: <code>midia_paga.performance_partner_mp_agency</code>, <code>cashback</code> = SUM(<code>cashback</code>).<br><br>Líquido (KPI ao lado) = Bruto − Cashback.</span></span></div><div class="kpi-value" id="kpi-cashback">—</div><div class="kpi-sub" id="kpi-cashback-sub">&nbsp;</div></div>
   <div class="kpi"><div class="kpi-label">Leads produtivos<span class="tip">i<span class="tip-content"><strong>Filtros base:</strong><ul><li><code>source IN ('google','whatsapp')</code></li><li><code>lead_accepted = true</code></li></ul><strong>⚠ Atribuição muda conforme o período:</strong><ul><li><strong>7d/30d/90d/mês:</strong> por campanha — Google via <code>lead_detail.campaign</code> ↔ <code>config.utm_campaign</code>; Meta via <code>wa_chat_start.user_id</code> ↔ <code>lead_detail.user_id</code> (janela 7d antes do lead)</li><li><strong>Período customizado (datas específicas):</strong> direto por <code>partner_id_partner = id_mp</code> do anunciante</li></ul>As duas formas normalmente convergem, mas podem divergir levemente pro mesmo partner/período (ex.: lead cuja campanha não bate com nenhuma config ativa). Exclui <code>whatsapp:paid</code> e Desktop.</span></span></div><div class="kpi-value" id="kpi-leads">—</div><div class="kpi-sub" id="kpi-leads-sub">&nbsp;</div></div>
   <div class="kpi"><div class="kpi-label">Vendas<span class="tip">i<span class="tip-content"><strong>Definição de venda:</strong><br><code>current_situation IN ('sold','installed','scheduled')</code><br><br>Mesmos filtros do lead produtivo (inclui <code>partner_id_partner = id_mp</code> do anunciante).<br><br>Não contam: <code>created</code>, <code>lost</code>, <code>negotiating</code>, <code>duplicated</code>, <code>test</code>, <code>not_identified</code>.</span></span></div><div class="kpi-value" id="kpi-vendas">—</div><div class="kpi-sub" id="kpi-vendas-sub">&nbsp;</div></div>
   <div class="kpi"><div class="kpi-label">CPL líq.<span class="tip">i<span class="tip-content"><strong>CPL = Investimento líquido / Leads produtivos</strong><br><br>Mede o custo real (depois de descontar cashback) por lead que ficou com o partner anunciante.</span></span></div><div class="kpi-value" id="kpi-cpl">—</div><div class="kpi-sub">por lead produtivo</div></div>
@@ -252,14 +253,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
   <div class="note">Protótipo — layout e métricas disponíveis ainda podem mudar. Ponto vazio (buraco na linha) = sem base suficiente ou sem dado naquele período.</div>
 </div>
 
-<div class="section">
-  <h2>Detalhamento investimento × leads × vendas<span class="tip">i<span class="tip-content"><strong>Consolidado por partner</strong> (soma Google + Meta quando filtro Canal = Todos).<br><br>Mesmos filtros das tabelas de funil acima:<ul><li>Lead: <code>source IN ('google','whatsapp')</code>, <code>lead_accepted = true</code></li><li>Venda: <code>current_situation IN ('sold','installed','scheduled')</code></li><li>Investimento: <code>raw_investment</code>, <code>cashback</code> e <code>partnership_net_daily_spend</code> de <code>performance_partner_mp_agency</code></li></ul><strong>Atribuição do lead:</strong> em 7d/30d/90d/mês, por campanha/chat (igual Funil completo); em período customizado, direto por <code>partner_id_partner</code>. Os dois podem divergir levemente pro mesmo partner/período.<br><br>CPL e CAC sobre líquido.<hr><strong>Alerta visual</strong> na Taxa Lead→Venda e no CAC: fundo vermelho se &lt;50% (ou &gt;200% pro CAC) da mediana; verde no oposto. Só partners com Leads ≥ 3 entram na comparação.<hr>Linhas em amarelo (linha inteira): partner com bruto &gt; 0 mas leads = 0.</span></span></h2>
-  <div id="table-container" class="table-wrap"></div>
-  <div class="alert-legend"><span class="swatch bad"></span> Pior que o padrão · <span class="swatch good"></span> Melhor que o padrão · Só partners com Leads ≥ 3 entram na comparação.</div>
-</div>
 
 <div class="section">
-  <h2>Crédito Remanescente por Parceiro<span class="tip">i<span class="tip-content"><strong>Fonte:</strong> <code>credit_remaining</code> em <code>performance_partner_mp_agency</code>, agregado por semana × partnership_id. <strong>Cada ponto no gráfico é a média do saldo diário na semana</strong>, não o valor no último dia dela.<br><br>Mostra a evolução do crédito disponível pra mídia de cada parceiro ao longo do tempo. Cada salto pra cima indica recarga (aumento do <code>total_credit</code>); a queda gradual reflete o consumo pelo investimento diário.<br><br><strong>Valor negativo</strong>: o partner gastou mais do que tinha de crédito ativo no período — pode ser política de adiantamento ou ajuste retroativo do MP.<br><br>Filtros de canal/período não se aplicam aqui (a métrica é por parceiro, agregada) — o filtro de Partner continua valendo.</span></span></h2>
+  <h2>% do Crédito Consumido por Parceiro<span class="tip">i<span class="tip-content"><strong>% consumido = (total_credit − credit_remaining) / total_credit</strong>, calculado a partir de <code>credit_remaining</code> em <code>performance_partner_mp_agency</code>, agregado por semana × partnership_id. <strong>Cada ponto no gráfico é a média do saldo diário na semana</strong>, não o valor no último dia dela.<br><br>Mostra o quanto do crédito de mídia de cada parceiro já foi consumido, normalizado — assim partners com crédito total bem diferente (ex. R$5 mil vs. R$90 mil) ficam comparáveis na mesma escala de 0-100%. Antes o gráfico mostrava o saldo em R$ absoluto, o que achatava parceiros pequenos perto de zero ao lado dos grandes.<br><br>Cada queda indica recarga (reset do consumo); a subida gradual reflete o gasto diário.<br><br><strong>Acima de 100%</strong>: o partner gastou mais do que tinha de crédito ativo no período — pode ser política de adiantamento ou ajuste retroativo do MP.<br><br>Filtros de canal/período não se aplicam aqui (a métrica é por parceiro, agregada) — o filtro de Partner continua valendo.</span></span></h2>
   <div class="chart-container" style="height:320px"><canvas id="chart-time"></canvas></div>
   <div class="note">Cores fixas por parceiro. Use o filtro <strong>Partner</strong> no topo pra isolar uma linha. Clique na legenda do Chart pra ocultar/exibir.</div>
 </div>
@@ -318,8 +314,6 @@ let state = {
   taxasGran: localStorage.getItem('mpa_taxas_gran') || 'weekly',
   chartGran:   localStorage.getItem('mpa_chart_gran')   || 'weekly',
   chartMetric: localStorage.getItem('mpa_chart_metric') || 'lead_venda',
-  sortKey: 'liquido',
-  sortDir: 'desc',
   sortGoogle: { key: 'cliques', dir: 'desc' },
   sortMeta:   { key: 'cliques', dir: 'desc' },
 };
@@ -629,13 +623,15 @@ function setKpiHtml(id, mainHtml, deltaHtml) {
 function renderKPIs() {
   const totals = aggregate(rowsForFilter());
   const prev = aggregate(rowsForPeriodPrev());
-  setKpiHtml('kpi-invest', fmtBRL(totals.liquido), deltaSpan(totals.liquido, prev.liquido, 'up_good'));
+  setKpiHtml('kpi-invest',   fmtBRL(totals.liquido),  deltaSpan(totals.liquido,  prev.liquido,  'up_good'));
+  setKpiHtml('kpi-cashback', fmtBRL(totals.cashback), deltaSpan(totals.cashback, prev.cashback, 'neutral'));
   setKpiHtml('kpi-leads',  fmtNum(totals.leads),   deltaSpan(totals.leads,   prev.leads,   'up_good'));
   setKpiHtml('kpi-vendas', fmtNum(totals.vendas),  deltaSpan(totals.vendas,  prev.vendas,  'up_good'));
   setKpiHtml('kpi-cpl',    totals.cpl == null ? '—' : fmtBRL(totals.cpl), deltaSpan(totals.cpl, prev.cpl, 'down_good'));
   setKpiHtml('kpi-cac',    totals.cac == null ? '—' : fmtBRL(totals.cac), deltaSpan(totals.cac, prev.cac, 'down_good'));
   setKpiHtml('kpi-rate',   fmtPct(totals.rate),    deltaSpan(totals.rate,    prev.rate,    'up_good'));
-  document.getElementById('kpi-invest-sub').textContent = `Bruto ${fmtBRL(totals.bruto)} · Cashback ${fmtBRL(totals.cashback)}`;
+  document.getElementById('kpi-invest-sub').textContent = `Bruto ${fmtBRL(totals.bruto)}`;
+  document.getElementById('kpi-cashback-sub').textContent = totals.bruto ? `${(totals.cashback / totals.bruto * 100).toFixed(0)}% do bruto` : ' ';
   if (!state.canal) {
     const base = rowsForPeriod().filter(r => partnerMatch(r.id_mp));
     const g = aggregate(base.filter(r => r.canal === 'google'));
@@ -668,7 +664,10 @@ function renderChartTime() {
   const partners = Object.keys(CREDIT_TIMESERIES).filter(p => partnerMatch(p));
   const datasets = partners.map(p => {
     const series = CREDIT_TIMESERIES[p];
-    const byDay = new Map(series.map(r => [r.dia, r.credito]));
+    // % consumido, não R$ remanescente — em R$ absoluto, parceiro com crédito total pequeno (ex. 5k)
+    // vira uma linha achatada perto de zero ao lado de um com 90k, mesmo consumindo no mesmo ritmo.
+    // Normalizado por total, os 8 partners ficam comparáveis na mesma escala 0-100%.
+    const byDay = new Map(series.map(r => [r.dia, safeDiv(r.total - r.credito, r.total)]));
     return {
       label: p,
       data: labels.map(d => byDay.has(d) ? byDay.get(d) : null),
@@ -689,12 +688,12 @@ function renderChartTime() {
       responsive: true, maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       scales: {
-        y: { beginAtZero: false, title: { display: true, text: 'Crédito remanescente (R$)' }, grid: { color: '#f4f4f5' }, ticks: { callback: (v) => fmtBRL(v) } },
+        y: { beginAtZero: true, title: { display: true, text: '% do crédito consumido' }, grid: { color: '#f4f4f5' }, ticks: { callback: (v) => fmtPct(v) } },
         x: { ticks: { autoSkip: true, maxTicksLimit: 14 } }
       },
       plugins: {
         legend: { position: 'top', align: 'end', labels: { boxWidth: 10, padding: 8, font: { size: 11 } } },
-        tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + (c.parsed.y == null ? '—' : fmtBRL(c.parsed.y)) } }
+        tooltip: { callbacks: { label: (c) => c.dataset.label + ': ' + (c.parsed.y == null ? '—' : fmtPct(c.parsed.y)) } }
       }
     }
   });
@@ -955,109 +954,6 @@ function renderFunnelMeta() {
   });
 }
 
-function renderDetailTable() {
-  // Agrega por partner (soma os canais que passam pelo filtro)
-  const byPartner = new Map();
-  for (const r of rowsForFilter()) {
-    if (!byPartner.has(r.id_mp)) byPartner.set(r.id_mp, { id_mp: r.id_mp, bruto: 0, cashback: 0, liquido: 0, leads: 0, vendas: 0 });
-    const a = byPartner.get(r.id_mp);
-    a.bruto    += r.bruto    || 0;
-    a.cashback += r.cashback || 0;
-    a.liquido  += r.liquido  || 0;
-    a.leads    += r.leads    || 0;
-    a.vendas   += r.vendas   || 0;
-  }
-  const rows = Array.from(byPartner.values()).map(r => ({
-    ...r,
-    cpl: safeDiv(r.liquido, r.leads),
-    cac: safeDiv(r.liquido, r.vendas),
-    rate: safeDiv(r.vendas, r.leads),
-  })).sort((a, b) => {
-    const k = state.sortKey;
-    const av = typeof a[k] === 'string' ? a[k] : Number(a[k] || 0);
-    const bv = typeof b[k] === 'string' ? b[k] : Number(b[k] || 0);
-    if (av < bv) return state.sortDir === 'asc' ? -1 : 1;
-    if (av > bv) return state.sortDir === 'asc' ? 1 : -1;
-    return 0;
-  });
-  if (rows.length === 0) { document.getElementById('table-container').innerHTML = '<div class="note">Nenhum dado para esse filtro.</div>'; return; }
-  // Medianas pra outlier (partners com leads ≥ 3 entram)
-  const peers = rows.filter(r => r.leads >= 3);
-  const medRate = median(peers.map(p => p.vendas / p.leads));
-  const medCac  = median(peers.filter(p => p.vendas > 0 && p.liquido > 0).map(p => p.liquido / p.vendas));
-  const medCpl  = median(peers.filter(p => p.liquido > 0).map(p => p.liquido / p.leads));
-  const cols = [
-    { key: 'id_mp', label: 'Partner' },
-    { key: 'bruto', label: 'Bruto' }, { key: 'cashback', label: 'Cashback' }, { key: 'liquido', label: 'Líquido' },
-    { key: 'leads', label: 'Leads', title: 'Leads produtivos: source em google/whatsapp e lead_accepted=true' }, { key: 'vendas', label: 'Vendas' },
-    { key: 'cpl', label: 'CPL líq.' }, { key: 'cac', label: 'CAC líq.' }, { key: 'rate', label: 'Lead→Venda' },
-  ];
-  let html = '<table><thead><tr>';
-  for (const c of cols) {
-    const cls = state.sortKey === c.key ? (state.sortDir === 'asc' ? 'sort-asc' : 'sort-desc') : '';
-    const titleAttr = c.title ? ` title="${c.title}"` : '';
-    html += `<th class="${cls}" data-key="${c.key}"${titleAttr}>${c.label}</th>`;
-  }
-  html += '</tr></thead><tbody>';
-  for (const r of rows) {
-    const warn = r.bruto > 0 && r.leads === 0;
-    const eligible = r.leads >= 3;
-    const clsRate = eligible ? outlierClass(r.rate, medRate, 'rate') : '';
-    const clsCac  = eligible && r.cac != null ? outlierClass(r.cac, medCac, 'cost') : '';
-    const clsCpl  = eligible && r.cpl != null ? outlierClass(r.cpl, medCpl, 'cost') : '';
-    // Período anterior consolidado por partner (somando canais ativos)
-    let pL = 0, pV = 0, pLiq = 0;
-    const pCG = findPrevCosts(r.id_mp, 'google');
-    const pCM = findPrevCosts(r.id_mp, 'meta');
-    const pFG = findPrevGoogle(r.id_mp);
-    const pFM = findPrevMeta(r.id_mp);
-    const respCanal = (canal) => !state.canal || state.canal === canal;
-    if (respCanal('google')) { if (pCG) pLiq += pCG.liquido || 0; if (pFG) { pL += pFG.leads || 0; pV += pFG.vendas || 0; } }
-    if (respCanal('meta'))   { if (pCM) pLiq += pCM.liquido || 0; if (pFM) { pL += pFM.leads || 0; pV += pFM.vendas || 0; } }
-    const pCpl = safeDiv(pLiq, pL), pCac = safeDiv(pLiq, pV), pRate = safeDiv(pV, pL);
-    html += `<tr class="${warn ? 'warn-row' : ''}">`
-      + `<td class="partner-cell">${r.id_mp || '—'}</td>`
-      + `<td class="num">${fmtBRL(r.bruto)}</td>`
-      + `<td class="num">${fmtBRL(r.cashback)}</td>`
-      + `<td class="num">${fmtBRL(r.liquido)}</td>`
-      + `<td class="num">${fmtNum(r.leads)}${deltaSpan(r.leads, pL, 'up_good')}</td>`
-      + `<td class="num">${fmtNum(r.vendas)}${deltaSpan(r.vendas, pV, 'up_good')}</td>`
-      + `<td class="num ${clsCpl}">${r.cpl == null ? '—' : fmtBRL(r.cpl)}${deltaSpan(r.cpl, pCpl, 'down_good')}</td>`
-      + `<td class="num ${clsCac}">${r.cac == null ? '—' : fmtBRL(r.cac)}${deltaSpan(r.cac, pCac, 'down_good')}</td>`
-      + `<td class="num ${clsRate}">${fmtPct(r.rate)}${deltaSpan(r.rate, pRate, 'up_good')}</td>`
-      + '</tr>';
-  }
-  // total
-  const tot = rows.reduce((a, r) => ({
-    bruto: a.bruto + r.bruto, cashback: a.cashback + r.cashback, liquido: a.liquido + r.liquido,
-    leads: a.leads + r.leads, vendas: a.vendas + r.vendas,
-  }), {bruto:0,cashback:0,liquido:0,leads:0,vendas:0});
-  const totCpl = safeDiv(tot.liquido, tot.leads);
-  const totCac = safeDiv(tot.liquido, tot.vendas);
-  const totRate = safeDiv(tot.vendas, tot.leads);
-  html += '<tr style="background:#f9fafb;font-weight:500;">'
-    + `<td class="partner-cell">TOTAL</td>`
-    + `<td class="num">${fmtBRL(tot.bruto)}</td>`
-    + `<td class="num">${fmtBRL(tot.cashback)}</td>`
-    + `<td class="num">${fmtBRL(tot.liquido)}</td>`
-    + `<td class="num">${fmtNum(tot.leads)}</td>`
-    + `<td class="num">${fmtNum(tot.vendas)}</td>`
-    + `<td class="num">${totCpl == null ? '—' : fmtBRL(totCpl)}</td>`
-    + `<td class="num">${totCac == null ? '—' : fmtBRL(totCac)}</td>`
-    + `<td class="num">${fmtPct(totRate)}</td>`
-    + '</tr>';
-  html += '</tbody></table>';
-  document.getElementById('table-container').innerHTML = html;
-  document.querySelectorAll('#table-container th').forEach(th => {
-    th.addEventListener('click', () => {
-      const k = th.dataset.key;
-      if (state.sortKey === k) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
-      else { state.sortKey = k; state.sortDir = (k === 'id_mp') ? 'asc' : 'desc'; }
-      renderDetailTable();
-    });
-  });
-}
-
 function applyCanalVisibility() {
   const showGoogle = !state.canal || state.canal === 'google';
   const showMeta   = !state.canal || state.canal === 'meta';
@@ -1153,7 +1049,6 @@ function render() {
   renderCoverage();
   renderProgressao();
   renderTaxas();
-  renderDetailTable();
   if (typeof Chart !== 'undefined') { renderChartTime(); renderTrendChart(); }
 }
 
