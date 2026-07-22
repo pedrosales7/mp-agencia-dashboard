@@ -86,6 +86,9 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .canal-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
 .canal-badge.canal-google { background: #dbeafe; color: #1e40af; }
 .canal-badge.canal-meta   { background: #ede9fe; color: #5b21b6; }
+th.canal-group { text-align: center !important; border-left: 1px solid var(--border); }
+th.canal-group.google { background: #dbeafe; color: #1e40af; }
+th.canal-group.meta   { background: #ede9fe; color: #5b21b6; }
 .warn-row td { background: #fffbeb; }
 .note { font-size: 12px; color: var(--muted); margin-top: 8px; font-style: italic; }
 .partner-cell { font-weight: 500; }
@@ -192,7 +195,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 </div>
 
 <div class="section" id="coverage-section">
-  <h2>Análise de Cobertura e Assertividade<span class="tip">i<span class="tip-content"><strong>3 indicadores combinados:</strong><ul><li><strong>% Cashback</strong> = cashback / bruto. Mede quanto do investimento voltou como cashback (leads/redirects pra outros provedores). Alto = muito reaproveitamento fora da cobertura do anunciante.</li><li><strong>Vol. base</strong> = denominador da assertividade: <strong>Clickoff</strong> pro Google, <strong>Chat start</strong> pro Meta (mostrado embaixo do número em cada linha).</li><li><strong>% Assertividade</strong> = leads produtivos / Vol. base. Mede: dos clickoffs/chats gerados pelo tráfego pago, quantos viraram lead no anunciante.</li></ul><hr><strong>Destaque visual:</strong> verde = melhor que mediana, vermelho = pior. Para %Cashback alto é tratado como "ruim" (pouca conversão pro anunciante); pra %Assertividade alto é "bom". Só entram na mediana partners com Bruto ≥ R$100 (cashback) ou Vol. base ≥ 20 (assertividade).<hr>Leads aqui seguem a mesma atribuição por campanha/chat das tabelas de Funil completo em 7d/30d/90d/mês; em período customizado usa <code>partner_id_partner</code> direto — os dois métodos podem divergir levemente.</span></span></h2>
+  <h2>Análise de Cobertura e Assertividade<span class="tip">i<span class="tip-content">Uma linha por partner, Google e Meta lado a lado (cada canal tem sua própria base — Clickoff pro Google, Chat start pro Meta — então não faz sentido somar).<br><br><strong>3 indicadores por canal:</strong><ul><li><strong>% Cashback</strong> = cashback / bruto (investimento). Mede quanto do investimento voltou como cashback (leads/redirects pra outros provedores). Alto = muito reaproveitamento fora da cobertura do anunciante.</li><li><strong>Leads totais</strong> = base de tráfego que chegou a interagir: <strong>Clickoff</strong> pro Google, <strong>Chat start</strong> pro Meta.</li><li><strong>Leads com cobertura</strong> = quantos desses viraram lead produtivo no anunciante.</li><li><strong>% Assertividade</strong> = Leads com cobertura / Leads totais.</li></ul><hr><strong>Destaque visual:</strong> verde = melhor que mediana, vermelho = pior. Para %Cashback alto é tratado como "ruim" (pouca conversão pro anunciante); pra %Assertividade alto é "bom". Medianas calculadas separadamente por canal. Só entram partners com Bruto ≥ R$100 (cashback) ou Leads totais ≥ 20 (assertividade).<hr>Leads aqui seguem a mesma atribuição por campanha/chat das tabelas de Funil completo em 7d/30d/90d/mês; em período customizado usa <code>partner_id_partner</code> direto — os dois métodos podem divergir levemente. Em período customizado, Leads totais e % Assertividade não ficam disponíveis (ver nota abaixo da tabela).</span></span></h2>
   <div class="table-wrap" id="coverage-table"></div>
   <div class="alert-legend"><span class="swatch bad"></span> Pior que o padrão · <span class="swatch good"></span> Melhor · "—" = volume base insuficiente. % Cashback: alto = lead caiu fora da cobertura. % Assertividade: alto = tráfego virou lead próprio.</div>
 </div>
@@ -911,12 +914,12 @@ function applyCanalVisibility() {
 }
 
 function renderCoverage() {
-  // Monta linhas (partner × canal) combinando custos (SNAPSHOT ou DAILY_SNAPSHOT agregado, se período customizado)
-  // + FUNNEL_GOOGLE/META (volume base e leads). Períodos padrão (7d/30d/90d/mês) têm funil detalhado disponível;
-  // período customizado só tem custos+leads/vendas agregados por dia (DAILY_SNAPSHOT não guarda clickoff/chat_start),
-  // então Vol. base e % Assertividade ficam marcados como indisponíveis nesse caso (ver nota abaixo da tabela).
+  // Monta 1 linha por partner, com Google e Meta lado a lado (não somados — cada canal tem
+  // sua própria base: Clickoff pro Google, Chat start pro Meta). Custos vêm de SNAPSHOT ou
+  // DAILY_SNAPSHOT agregado (período customizado); períodos padrão (7d/30d/90d/mês) têm funil
+  // detalhado disponível — período customizado não, então Leads totais e % Assertividade
+  // ficam indisponíveis nesse caso (ver nota abaixo da tabela).
   const custom = isCustomActive();
-  const partnerFlt = (id) => partnerMatch(id);
   const gMap = new Map(), mMap = new Map();
   let costRows;
   if (custom) {
@@ -927,65 +930,78 @@ function renderCoverage() {
     FUNNEL_GOOGLE.filter(periodFlt).forEach(r => gMap.set(r.id_mp, r));
     FUNNEL_META.filter(periodFlt).forEach(r => mMap.set(r.id_mp, r));
   }
-  const cMap = new Map();
-  costRows.forEach(s => cMap.set(s.id_mp + '|' + s.canal, s));
-  const rows = [];
-  for (const [key, s] of cMap) {
-    if (!partnerFlt(s.id_mp)) continue;
-    if (state.canal && state.canal !== s.canal) continue;
-    const isGoogle = s.canal === 'google';
+  function buildChannelData(s, isGoogle) {
     const funnel = isGoogle ? gMap.get(s.id_mp) : mMap.get(s.id_mp);
-    const baseVol = funnel ? (isGoogle ? funnel.clickoff : funnel.chat_start) : (custom ? null : 0);
-    const leads = custom ? (s.leads || 0) : (funnel ? funnel.leads : 0);
-    rows.push({
-      id_mp: s.id_mp,
-      canal: s.canal,
-      bruto: s.bruto, cashback: s.cashback, liquido: s.liquido,
+    const totalLeads = funnel ? (isGoogle ? funnel.clickoff : funnel.chat_start) : (custom ? null : 0);
+    const coveredLeads = custom ? (s.leads || 0) : (funnel ? funnel.leads : 0);
+    return {
+      bruto: s.bruto, cashback: s.cashback,
       pct_cashback: safeDiv(s.cashback, s.bruto),
-      vol_base: baseVol,
-      base_label: isGoogle ? 'Clickoff' : 'Chat start',
-      leads: leads,
-      pct_assertividade: (baseVol != null) ? safeDiv(leads, baseVol) : null,
-    });
+      total_leads: totalLeads,
+      covered_leads: coveredLeads,
+      pct_assertividade: (totalLeads != null) ? safeDiv(coveredLeads, totalLeads) : null,
+    };
   }
+  const byPartner = new Map();
+  for (const s of costRows) {
+    if (!partnerMatch(s.id_mp)) continue;
+    if (state.canal && state.canal !== s.canal) continue;
+    if (!byPartner.has(s.id_mp)) byPartner.set(s.id_mp, { id_mp: s.id_mp, g: null, m: null });
+    const row = byPartner.get(s.id_mp);
+    if (s.canal === 'google') row.g = buildChannelData(s, true);
+    else row.m = buildChannelData(s, false);
+  }
+  const rows = Array.from(byPartner.values());
   // Mediana: separar por canal pq Clickoff e Chat são bases diferentes
-  const gRows = rows.filter(r => r.canal === 'google' && r.bruto >= 100);
-  const mRows = rows.filter(r => r.canal === 'meta'   && r.bruto >= 100);
-  const medCashbackG = median(gRows.map(r => r.pct_cashback));
-  const medCashbackM = median(mRows.map(r => r.pct_cashback));
-  const medAssertG   = median(gRows.filter(r => r.vol_base >= 20).map(r => r.pct_assertividade));
-  const medAssertM   = median(mRows.filter(r => r.vol_base >= 20).map(r => r.pct_assertividade));
-  rows.sort((a,b) => (b.bruto || 0) - (a.bruto || 0));
+  const gVals = rows.map(r => r.g).filter(d => d && d.bruto >= 100);
+  const mVals = rows.map(r => r.m).filter(d => d && d.bruto >= 100);
+  const medCashbackG = median(gVals.map(d => d.pct_cashback));
+  const medCashbackM = median(mVals.map(d => d.pct_cashback));
+  const medAssertG   = median(gVals.filter(d => d.total_leads >= 20).map(d => d.pct_assertividade));
+  const medAssertM   = median(mVals.filter(d => d.total_leads >= 20).map(d => d.pct_assertividade));
+  // Sem coluna de Bruto na tabela, mas ainda ordena pelos maiores investidores primeiro (soma dos 2 canais).
+  rows.sort((a, b) => ((b.g?.bruto || 0) + (b.m?.bruto || 0)) - ((a.g?.bruto || 0) + (a.m?.bruto || 0)));
   if (rows.length === 0) { document.getElementById('coverage-table').innerHTML = '<div class="note">Nenhum dado para esse filtro.</div>'; return; }
-  const cols = ['Partner','Canal','Bruto','Cashback','% Cashback','Vol. base','Leads','% Assertividade'];
-  let html = '<table><thead><tr>' + cols.map(c => `<th class="${c==='Partner'||c==='Canal'?'':'num-h'}">${c}</th>`).join('') + '</tr></thead><tbody>';
-  for (const r of rows) {
-    const med1 = r.canal === 'google' ? medCashbackG : medCashbackM;
-    const med2 = r.canal === 'google' ? medAssertG   : medAssertM;
-    const eligibleCash = r.bruto >= 100;
-    const eligibleAsr  = r.vol_base != null && r.bruto >= 100 && r.vol_base >= 20;
-    const clsCash = eligibleCash ? outlierClass(r.pct_cashback, med1, 'cost') : '';
-    const clsAsr  = eligibleAsr  ? outlierClass(r.pct_assertividade, med2, 'rate') : '';
-    // Período anterior pra essas mesmas métricas
-    const prevCosts = findPrevCosts(r.id_mp, r.canal);
-    const prevFunnel = r.canal === 'google' ? findPrevGoogle(r.id_mp) : findPrevMeta(r.id_mp);
+  function channelCells(d, canal) {
+    if (!d) {
+      return '<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td>';
+    }
+    const med1 = canal === 'google' ? medCashbackG : medCashbackM;
+    const med2 = canal === 'google' ? medAssertG   : medAssertM;
+    const eligibleCash = d.bruto >= 100;
+    const eligibleAsr  = d.total_leads != null && d.bruto >= 100 && d.total_leads >= 20;
+    const clsCash = eligibleCash ? outlierClass(d.pct_cashback, med1, 'cost') : '';
+    const clsAsr  = eligibleAsr  ? outlierClass(d.pct_assertividade, med2, 'rate') : '';
+    const prevCosts = findPrevCosts(d.id_mp_ref, canal);
+    const prevFunnel = canal === 'google' ? findPrevGoogle(d.id_mp_ref) : findPrevMeta(d.id_mp_ref);
     const prevPctCashback = prevCosts ? safeDiv(prevCosts.cashback, prevCosts.bruto) : null;
-    const prevVolBase = prevFunnel ? (r.canal === 'google' ? prevFunnel.clickoff : prevFunnel.chat_start) : null;
-    const prevPctAsr = (prevFunnel && prevVolBase > 0) ? safeDiv(prevFunnel.leads, prevVolBase) : null;
+    const prevTotalLeads = prevFunnel ? (canal === 'google' ? prevFunnel.clickoff : prevFunnel.chat_start) : null;
+    const prevPctAsr = (prevFunnel && prevTotalLeads > 0) ? safeDiv(prevFunnel.leads, prevTotalLeads) : null;
+    return `<td class="num ${clsCash}"><span class="cell-volume">${fmtPct(d.pct_cashback)}</span>${deltaSpan(d.pct_cashback, prevPctCashback, 'down_good')}</td>`
+      + `<td class="num">${d.total_leads != null ? fmtNum(d.total_leads) : '—'}</td>`
+      + `<td class="num">${fmtNum(d.covered_leads)}</td>`
+      + `<td class="num ${clsAsr}"><span class="cell-volume">${(d.total_leads > 0) ? fmtPct(d.pct_assertividade) : '—'}</span>${deltaSpan(d.pct_assertividade, prevPctAsr, 'up_good')}</td>`;
+  }
+  let html = '<table><thead><tr>'
+    + '<th rowspan="2" style="vertical-align:bottom;">Partner</th>'
+    + '<th colspan="4" class="canal-group google">Google</th>'
+    + '<th colspan="4" class="canal-group meta">Meta</th>'
+    + '</tr><tr>'
+    + '<th class="num-h">% Cashback</th><th class="num-h">Leads totais</th><th class="num-h">Leads c/ cobertura</th><th class="num-h">% Assertividade</th>'
+    + '<th class="num-h">% Cashback</th><th class="num-h">Leads totais</th><th class="num-h">Leads c/ cobertura</th><th class="num-h">% Assertividade</th>'
+    + '</tr></thead><tbody>';
+  for (const r of rows) {
+    if (r.g) r.g.id_mp_ref = r.id_mp;
+    if (r.m) r.m.id_mp_ref = r.id_mp;
     html += '<tr>'
       + `<td class="partner-cell">${r.id_mp}</td>`
-      + `<td><span class="canal-badge canal-${r.canal}">${r.canal}</span></td>`
-      + `<td class="num">${fmtBRL(r.bruto)}</td>`
-      + `<td class="num">${fmtBRL(r.cashback)}</td>`
-      + `<td class="num ${clsCash}"><span class="cell-volume">${fmtPct(r.pct_cashback)}</span>${deltaSpan(r.pct_cashback, prevPctCashback, 'down_good')}</td>`
-      + `<td class="num">${r.vol_base != null ? `<span class="cell-volume">${fmtNum(r.vol_base)}</span><span class="cell-conv">${r.base_label}</span>` : '<span class="cell-volume">—</span>'}</td>`
-      + `<td class="num">${fmtNum(r.leads)}</td>`
-      + `<td class="num ${clsAsr}"><span class="cell-volume">${(r.vol_base > 0) ? fmtPct(r.pct_assertividade) : '—'}</span>${deltaSpan(r.pct_assertividade, prevPctAsr, 'up_good')}</td>`
+      + channelCells(r.g, 'google')
+      + channelCells(r.m, 'meta')
       + '</tr>';
   }
   html += '</tbody></table>';
   if (custom) {
-    html += '<div class="note">Período customizado: Vol. base e % Assertividade não disponíveis (dados de funil detalhado só existem pros períodos padrão 7d/30d/90d/mês). Bruto, Cashback, % Cashback e Leads refletem o intervalo selecionado.</div>';
+    html += '<div class="note">Período customizado: Leads totais e % Assertividade não disponíveis (dados de funil detalhado só existem pros períodos padrão 7d/30d/90d/mês). % Cashback e Leads c/ cobertura refletem o intervalo selecionado.</div>';
   }
   document.getElementById('coverage-table').innerHTML = html;
 }
