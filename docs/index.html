@@ -666,8 +666,15 @@ function funnelCell(value, prevValue, outlierCls, prevAbsValue) {
 
 function renderFunnelGoogle() {
   const sortRef = state.sortGoogle;
-  const rows = (state.period === 'custom' ? googleFunnelCustom() : googleFunnel()).slice().sort((a,b) => {
+  // cpl/cac/conv_final são calculados aqui (antes do sort) pra poderem ser usados como sortKey —
+  // reaproveitados no loop de render abaixo pra não recalcular com valor divergente.
+  const rows = (state.period === 'custom' ? googleFunnelCustom() : googleFunnel()).map(r => ({
+    ...r, cpl: safeDiv(r.liquido, r.leads), cac: safeDiv(r.liquido, r.vendas), conv_final: safeDiv(r.vendas, r.cliques),
+  })).sort((a,b) => {
     const av = a[sortRef.key]; const bv = b[sortRef.key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
     if (typeof av === 'string') return sortRef.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
     return sortRef.dir === 'asc' ? (av - bv) : (bv - av);
   });
@@ -704,10 +711,10 @@ function renderFunnelGoogle() {
   }
   html += '</tr></thead><tbody>';
   for (const r of rows) {
-    const cpl = safeDiv(r.liquido, r.leads);
-    const cac = safeDiv(r.liquido, r.vendas);
+    const cpl = r.cpl;
+    const cac = r.cac;
     const cpc = safeDiv(r.bruto, r.cliques);
-    const convFinal = safeDiv(r.vendas, r.cliques);
+    const convFinal = r.conv_final;
     const eligible = r.cliques >= 30;
     const clsSessoes        = eligible && r.cliques > 0  ? outlierClass(r.sessoes / r.cliques,    medSessoesCliques,   'rate') : '';
     const clsClickoff       = eligible && r.sessoes > 0  ? outlierClass(r.clickoff / r.sessoes,   medClickoffSessoes,  'rate') : '';
@@ -770,7 +777,7 @@ function renderFunnelGoogle() {
   document.querySelectorAll('#funnel-google-table th').forEach(th => {
     th.addEventListener('click', () => {
       const k = th.dataset.key;
-      if (k === 'conv_final' || k === 'cpl' || k === 'cac' || k === 'cpc') return;
+      if (k === 'cpc') return;
       if (state.sortGoogle.key === k) state.sortGoogle.dir = state.sortGoogle.dir === 'asc' ? 'desc' : 'asc';
       else { state.sortGoogle.key = k; state.sortGoogle.dir = (k === 'id_mp') ? 'asc' : 'desc'; }
       renderFunnelGoogle();
@@ -780,8 +787,15 @@ function renderFunnelGoogle() {
 
 function renderFunnelMeta() {
   const sortRef = state.sortMeta;
-  const rows = (state.period === 'custom' ? metaFunnelCustom() : metaFunnel()).slice().sort((a,b) => {
+  // cpl/cac/conv_final são calculados aqui (antes do sort) pra poderem ser usados como sortKey —
+  // reaproveitados no loop de render abaixo pra não recalcular com valor divergente.
+  const rows = (state.period === 'custom' ? metaFunnelCustom() : metaFunnel()).map(r => ({
+    ...r, cpl: safeDiv(r.liquido, r.leads), cac: safeDiv(r.liquido, r.vendas), conv_final: safeDiv(r.vendas, r.cliques),
+  })).sort((a,b) => {
     const av = a[sortRef.key]; const bv = b[sortRef.key];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
     if (typeof av === 'string') return sortRef.dir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
     return sortRef.dir === 'asc' ? (av - bv) : (bv - av);
   });
@@ -818,10 +832,10 @@ function renderFunnelMeta() {
   }
   html += '</tr></thead><tbody>';
   for (const r of rows) {
-    const cpl = safeDiv(r.liquido, r.leads);
-    const cac = safeDiv(r.liquido, r.vendas);
+    const cpl = r.cpl;
+    const cac = r.cac;
     const cpc = safeDiv(r.bruto, r.cliques);
-    const convFinal = safeDiv(r.vendas, r.cliques);
+    const convFinal = r.conv_final;
     const eligible = r.cliques >= 100;
     const clsChat           = eligible && r.cliques > 0    ? outlierClass(r.chat_start / r.cliques,   medChatCliques,   'rate') : '';
     const clsZip            = eligible && r.chat_start > 0 ? outlierClass(r.zip_search / r.chat_start, medZipChat,       'rate') : '';
@@ -885,7 +899,7 @@ function renderFunnelMeta() {
   document.querySelectorAll('#funnel-meta-table th').forEach(th => {
     th.addEventListener('click', () => {
       const k = th.dataset.key;
-      if (k === 'conv_final' || k === 'cpl' || k === 'cac' || k === 'cpc') return;
+      if (k === 'cpc') return;
       if (state.sortMeta.key === k) state.sortMeta.dir = state.sortMeta.dir === 'asc' ? 'desc' : 'asc';
       else { state.sortMeta.key = k; state.sortMeta.dir = (k === 'id_mp') ? 'asc' : 'desc'; }
       renderFunnelMeta();
