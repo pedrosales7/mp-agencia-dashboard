@@ -1134,7 +1134,15 @@ function render() {
 
 // ─────────── Progressão por Partner ───────────
 function buildMonthlyForPartner(id_mp) {
-  const months = ['2026-02','2026-03','2026-04','2026-05','2026-06'];
+  // Meses detectados dinamicamente (igual buildTaxasMonthly) — antes era uma lista fixa
+  // que parava em jun/26 e nunca incluía os meses seguintes sem editar o código.
+  const currMonth = SNAPSHOT_ISO.slice(0, 7);
+  const isMonthKey = (k) => /^\d{4}-\d{2}$/.test(k);
+  const monthKeys = new Set();
+  for (const r of SNAPSHOT)       if (isMonthKey(r.period_key) && r.period_key !== currMonth) monthKeys.add(r.period_key);
+  for (const r of FUNNEL_GOOGLE)  if (isMonthKey(r.p_key)      && r.p_key      !== currMonth) monthKeys.add(r.p_key);
+  for (const r of FUNNEL_META)    if (isMonthKey(r.p_key)      && r.p_key      !== currMonth) monthKeys.add(r.p_key);
+  const months = Array.from(monthKeys).sort().slice(-6);
   return months.map(m => {
     const sG = SNAPSHOT.find(s => s.period_key === m && s.id_mp === id_mp && s.canal === 'google');
     const sM = SNAPSHOT.find(s => s.period_key === m && s.id_mp === id_mp && s.canal === 'meta');
