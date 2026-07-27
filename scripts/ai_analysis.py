@@ -293,9 +293,14 @@ MECÂNICA DO CASHBACK (importante): quando o lead gerado pela campanha de um par
 provedor (ex.: sem cobertura do anunciante no CEP do usuário), o anunciante recebe cashback de
 reinvestimento. Por isso:
 - investimento_liquido = investimento_bruto - cashback. CPL e CAC JÁ vêm calculados sobre o líquido.
-- Cashback alto NÃO é "dinheiro de volta, ótimo": é sinal de que a campanha está gerando demanda
-  fora da área de cobertura do anunciante. pct_cashback crescente pede revisão de segmentação
-  geográfica (raios, CEPs, cidades) da campanha.
+- Cashback alto NÃO é problema por si só. Ele mede COBERTURA, não desperdício: diz que existe
+  demanda em CEPs onde o parceiro não atende. Se o CPL está na meta e o volume de leads é razoável,
+  a campanha está saudável e o cashback é só o retrato da área atendida — não abra o parecer por
+  ele e não recomende apertar o raio de segmentação.
+- Cashback vira problema quando vem ACOMPANHADO de CPL ruim ou volume baixo de leads: aí a verba
+  está comprando demanda que não converte pro anunciante.
+- Quando o cashback é alto e o resto está saudável, a recomendação certa é revisar a ÁREA DE
+  COBERTURA do parceiro (avaliar expandir onde há demanda), não cortar segmentação.
 - Atribuição de lead e venda é SEMPRE ao partner anunciante (quem pagou a campanha), nunca ao
   provedor que recebeu o lead.
 </contexto_negocio>
@@ -371,9 +376,10 @@ Antes de escrever, monte internamente o quadro de cada partner — NESTA ORDEM (
 2. Só depois olhe benchmark_pre_clique_30d (CTR/CPC vs pares). Desvio de 30% ou mais DEVE
    aparecer no parecer: CTR muito abaixo dos pares = criativo/segmentação; CPC muito acima =
    leilão/qualidade do anúncio.
-3. Cashback (pct_cashback) entra como explicação SÓ quando o gargalo apontado for pré-clique
-   (CTR/CPC) ou quando pct_cashback subiu vs a janela anterior — cashback alto sozinho, sem
-   subida, é contexto, não é a manchete do parecer.
+3. Cashback (pct_cashback) só entra no diagnóstico se o CPL estiver acima da meta OU o volume de
+   leads estiver baixo. Cashback alto com CPL na meta e volume razoável é COBERTURA, não
+   desperdício — nesse caso, se citar, é como oportunidade de revisar a área atendida, nunca como
+   problema de campanha, e nunca como abertura do parecer.
 4. Use tendencia_semanal_por_partner pra dizer HÁ QUANTAS SEMANAS o padrão se repete
    (semanas_estaveis_consecutivas) em vez de citar só o valor da janela atual — isso é o que
    separa tendência real de ruído de uma semana.
@@ -402,7 +408,9 @@ Padrões de diagnóstico úteis:
 - meta: cliques>chat_start fraca = criativo/CTA ou fricção do click-to-WhatsApp; chat_start>
   zip_search fraca = abandono no início do bot; zip_search>redirect fraca = CEPs fora da cobertura
   (segmentação geográfica); redirect>lead fraca = fricção final do fluxo.
-- pct_cashback subindo = campanha vendendo para concorrentes = segmentação geográfica desalinhada.
+- pct_cashback subindo ACOMPANHADO de CPL ruim ou volume baixo de leads = segmentação vendendo
+  demanda que não converte pro anunciante; pct_cashback alto isolado, com CPL na meta, é cobertura
+  saudável, não desalinhamento.
 - lead>venda fraca = operação comercial do provedor, não mídia — ação é acionar o responsável.
 </como_pensar>
 
