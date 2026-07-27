@@ -4,6 +4,20 @@
 -- Substituir {{CUTOFF}} pela data correta: current_date - 1
 -- cutoff = 'YYYY-MM-DD' (último dia completo)
 -- d_ini = primeiro dia do mês corrente (ou 30 dias antes do cutoff)
+--
+-- CHANGELOG 2026-07-24: a regra de atribuição `americanet + chat_start com label
+-- 'mpa.unifique' → 'unifique'` existia só no FUNNEL_META e no DAILY_FUNNEL_META
+-- (adicionada em 06/07). SNAPSHOT, PREV_SNAPSHOT, PARTNER_WEEKLY e DAILY_SNAPSHOT
+-- ficaram de fora, então as duas metades do dashboard contavam o Unifique de
+-- forma diferente — o funil via os leads, o snapshot via zero. Custou 15 leads e
+-- 3 vendas invisíveis em maio/2026. Agora as quatro têm a mesma regra.
+--
+-- O que NÃO foi unificado, de propósito: no Google, FUNNEL_GOOGLE atribui por
+-- campanha (ld.campaign → config.utm_campaign) e as queries de snapshot atribuem
+-- por partner_id_partner. Isso é design (ver nota em FUNNEL_META): as etapas do
+-- funil respondem "quem passou pela etapa", leads/vendas respondem "quem foi
+-- atribuído no CRM". Divergências pequenas de leads no Google entre os dois
+-- blocos são esperadas.
 -- ============================================================
 
 
@@ -26,12 +40,24 @@ investimento AS (
     GROUP BY 1, 2
 ),
 leads_vendas AS (
-    SELECT CASE WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE ld.partner_id_partner END AS partner_id_partner,
+    SELECT CASE
+               WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra'
+               WHEN ld.partner_id_partner = 'americanet' AND wcs_unif.user_id IS NOT NULL THEN 'unifique'
+               ELSE ld.partner_id_partner
+           END AS partner_id_partner,
+           -- COUNT(DISTINCT ...) e não SUM(CASE...): o LEFT JOIN com wa_chat_start
+           -- pode casar N chat_starts pro mesmo lead na janela de 7 dias. É a
+           -- armadilha (A) do changelog de 06/07 no FUNNEL_META.
            COUNT(DISTINCT ld.id) AS leads,
-           SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas,
-           SUM(CASE WHEN ld.source = 'google' THEN 1 ELSE 0 END) AS leads_g,
-           SUM(CASE WHEN ld.source = 'whatsapp' THEN 1 ELSE 0 END) AS leads_m
+           COUNT(DISTINCT CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN ld.id END) AS vendas,
+           COUNT(DISTINCT CASE WHEN ld.source = 'google' THEN ld.id END) AS leads_g,
+           COUNT(DISTINCT CASE WHEN ld.source = 'whatsapp' THEN ld.id END) AS leads_m
     FROM checkout.lead_detail ld
+    LEFT JOIN whatsapp_assistant.wa_chat_start wcs_unif
+        ON wcs_unif.user_id = ld.user_id
+       AND wcs_unif._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
+       AND wcs_unif.referral_agent_label = 'mpa.unifique'
+       AND ld.source = 'whatsapp'
     JOIN periodo ON ld.created_at >= periodo.d_ini + INTERVAL '3 hours' AND ld.created_at < periodo.d_fim + INTERVAL '1 day' + INTERVAL '3 hours'
     WHERE ld.source IN ('google','whatsapp') AND ld.lead_accepted = true
     GROUP BY 1
@@ -77,12 +103,22 @@ investimento AS (
     GROUP BY 1
 ),
 leads_vendas AS (
-    SELECT CASE WHEN partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE partner_id_partner END AS partner_id_partner,
-           COUNT(DISTINCT id) AS leads,
-           SUM(CASE WHEN current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
-    FROM checkout.lead_detail
-    JOIN periodo ON created_at BETWEEN periodo.d_ini AND periodo.d_fim
-    WHERE source IN ('google','whatsapp') AND lead_accepted = true
+    SELECT CASE
+               WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra'
+               WHEN ld.partner_id_partner = 'americanet' AND wcs_unif.user_id IS NOT NULL THEN 'unifique'
+               ELSE ld.partner_id_partner
+           END AS partner_id_partner,
+           COUNT(DISTINCT ld.id) AS leads,
+           -- DISTINCT pelo mesmo motivo do SNAPSHOT: o join com wa_chat_start multiplica linha
+           COUNT(DISTINCT CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN ld.id END) AS vendas
+    FROM checkout.lead_detail ld
+    LEFT JOIN whatsapp_assistant.wa_chat_start wcs_unif
+        ON wcs_unif.user_id = ld.user_id
+       AND wcs_unif._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
+       AND wcs_unif.referral_agent_label = 'mpa.unifique'
+       AND ld.source = 'whatsapp'
+    JOIN periodo ON ld.created_at BETWEEN periodo.d_ini AND periodo.d_fim
+    WHERE ld.source IN ('google','whatsapp') AND ld.lead_accepted = true
     GROUP BY 1
 )
 SELECT
@@ -475,15 +511,25 @@ chat_start_m AS (
     GROUP BY 1, 2
 ),
 leads_semana AS (
-    SELECT DATE_TRUNC('week', created_at - INTERVAL '3 hours')::date AS semana,
-           CASE WHEN partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE partner_id_partner END AS id_mp,
-           SUM(CASE WHEN source = 'google'   THEN 1 ELSE 0 END) AS leads_g,
-           SUM(CASE WHEN source = 'google'   AND current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas_g,
-           SUM(CASE WHEN source = 'whatsapp' THEN 1 ELSE 0 END) AS leads_m,
-           SUM(CASE WHEN source = 'whatsapp' AND current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas_m
-    FROM checkout.lead_detail
-    WHERE source IN ('google','whatsapp') AND lead_accepted = true
-      AND created_at >= '{{WEEKLY_START}}'::date + INTERVAL '3 hours' AND created_at < '{{CUTOFF}}'::date + INTERVAL '1 day' + INTERVAL '3 hours'
+    SELECT DATE_TRUNC('week', ld.created_at - INTERVAL '3 hours')::date AS semana,
+           CASE
+               WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra'
+               WHEN ld.partner_id_partner = 'americanet' AND wcs_unif.user_id IS NOT NULL THEN 'unifique'
+               ELSE ld.partner_id_partner
+           END AS id_mp,
+           -- DISTINCT pelo mesmo motivo do SNAPSHOT: o join com wa_chat_start multiplica linha
+           COUNT(DISTINCT CASE WHEN ld.source = 'google'   THEN ld.id END) AS leads_g,
+           COUNT(DISTINCT CASE WHEN ld.source = 'google'   AND ld.current_situation IN ('sold','installed','scheduled') THEN ld.id END) AS vendas_g,
+           COUNT(DISTINCT CASE WHEN ld.source = 'whatsapp' THEN ld.id END) AS leads_m,
+           COUNT(DISTINCT CASE WHEN ld.source = 'whatsapp' AND ld.current_situation IN ('sold','installed','scheduled') THEN ld.id END) AS vendas_m
+    FROM checkout.lead_detail ld
+    LEFT JOIN whatsapp_assistant.wa_chat_start wcs_unif
+        ON wcs_unif.user_id = ld.user_id
+       AND wcs_unif._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
+       AND wcs_unif.referral_agent_label = 'mpa.unifique'
+       AND ld.source = 'whatsapp'
+    WHERE ld.source IN ('google','whatsapp') AND ld.lead_accepted = true
+      AND ld.created_at >= '{{WEEKLY_START}}'::date + INTERVAL '3 hours' AND ld.created_at < '{{CUTOFF}}'::date + INTERVAL '1 day' + INTERVAL '3 hours'
     GROUP BY 1, 2
 )
 SELECT s.semana, s.id_mp,
@@ -536,11 +582,21 @@ investimento AS (
 ),
 leads_vendas AS (
     SELECT (ld.created_at - INTERVAL '3 hours')::date AS dia,
-           CASE WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra' ELSE ld.partner_id_partner END AS id_mp,
+           CASE
+               WHEN ld.partner_id_partner = 'enove-solucoes' THEN 'enove-fibra'
+               WHEN ld.partner_id_partner = 'americanet' AND wcs_unif.user_id IS NOT NULL THEN 'unifique'
+               ELSE ld.partner_id_partner
+           END AS id_mp,
            CASE WHEN ld.source = 'google' THEN 'google' ELSE 'meta' END AS canal,
            COUNT(DISTINCT ld.id) AS leads,
-           SUM(CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN 1 ELSE 0 END) AS vendas
+           -- DISTINCT pelo mesmo motivo do SNAPSHOT: o join com wa_chat_start multiplica linha
+           COUNT(DISTINCT CASE WHEN ld.current_situation IN ('sold','installed','scheduled') THEN ld.id END) AS vendas
     FROM checkout.lead_detail ld
+    LEFT JOIN whatsapp_assistant.wa_chat_start wcs_unif
+        ON wcs_unif.user_id = ld.user_id
+       AND wcs_unif._timestamp BETWEEN ld.created_at - INTERVAL '7 day' AND ld.created_at
+       AND wcs_unif.referral_agent_label = 'mpa.unifique'
+       AND ld.source = 'whatsapp'
     JOIN periodo ON (ld.created_at - INTERVAL '3 hours')::date BETWEEN periodo.d_ini AND periodo.d_fim
     WHERE ld.source IN ('google','whatsapp') AND ld.lead_accepted = true
     GROUP BY 1, 2, 3

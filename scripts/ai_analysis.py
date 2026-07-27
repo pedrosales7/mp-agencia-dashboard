@@ -20,7 +20,8 @@ import os
 import re
 import time
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
+from statistics import median
 
 import requests
 
@@ -54,19 +55,193 @@ def _ratio(num, den):
     return round(num / den, 2) if den else None
 
 
-def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
-                  cutoff_dt, valid_partners):
+def _week_start(dia_iso):
+    """Segunda-feira da semana do dia — mesma convenção do DATE_TRUNC('week') do Redshift."""
+    d = date.fromisoformat(dia_iso)
+    return (d - timedelta(days=d.weekday())).isoformat()
+
+
+def weekly_series(all_daily, all_dfg, all_dfm, cutoff_dt, valid_partners, n_weeks=8):
+    """Série semanal por partner × canal, derivada do dado DIÁRIO.
+
+    Substitui o PARTNER_WEEKLY como fonte da série (fix 2026-07-24). Três motivos:
+    - o dict do PARTNER_WEEKLY traz `leads_g`/`leads_m`, não `leads` — o
+      _trend_summary lia um campo inexistente e devolvia sem_base/0 pra TODO
+      partner desde sempre. A tendência nunca funcionou em produção.
+    - só tem verba no nível do partner, então CPL/CAC por canal eram impossíveis;
+      e não tem impressões, então CTR por semana também não existia — mas o prompt
+      mandava ancorar tendência de CTR e impressões nesse campo. O modelo só podia
+      inventar.
+    - o resto do payload já sai do DAILY_SNAPSHOT/DAILY_FUNNEL_*; derivar daqui
+      elimina divergência de atribuição entre a série e as janelas.
+
+    Semanas incompletas são descartadas: o run é terça com cutoff = segunda, então
+    o bucket mais recente teria 1 dia só e puxaria toda tendência para "queda".
+    """
+    fim_ultima_completa = cutoff_dt - timedelta(days=cutoff_dt.weekday() + 1)  # domingo anterior
+    ini = (fim_ultima_completa - timedelta(days=7 * n_weeks - 1)).isoformat()
+    fim = fim_ultima_completa.isoformat()
+    semanas = sorted({_week_start(d) for d in (
+        (fim_ultima_completa - timedelta(days=7 * i)).isoformat() for i in range(n_weeks))})
+
+    agg = defaultdict(lambda: defaultdict(float))  # (partner, canal, ws) -> campos
+    for r in all_daily:
+        if r["id_mp"] in valid_partners and ini <= r["dia"] <= fim:
+            for canal in (r["canal"], "total"):
+                k = (r["id_mp"], canal, _week_start(r["dia"]))
+                for f in ("liquido", "leads", "vendas"):
+                    agg[k][f] += r.get(f) or 0
+    for rows, canal in ((all_dfg, "google"), (all_dfm, "meta")):
+        for r in rows:
+            if r["id_mp"] in valid_partners and ini <= r["dia"] <= fim:
+                for c in (canal, "total"):
+                    k = (r["id_mp"], c, _week_start(r["dia"]))
+                    for f in ("cliques", "impressoes"):
+                        agg[k][f] += r.get(f) or 0
+
+    out = {}
+    for p in valid_partners:
+        for canal in ("total", "google", "meta"):
+            serie = []
+            for ws in semanas:
+                v = agg.get((p, canal, ws), {})
+                liq = round(v.get("liquido", 0))
+                leads, vendas = int(v.get("leads", 0)), int(v.get("vendas", 0))
+                cliques, impr = int(v.get("cliques", 0)), int(v.get("impressoes", 0))
+                serie.append({
+                    "ws": ws, "liquido": liq, "leads": leads, "vendas": vendas,
+                    "cliques": cliques, "impressoes": impr,
+                    "cpl": _ratio(liq, leads), "cac": _ratio(liq, vendas),
+                    "ctr_pct": round(100 * cliques / impr, 2) if impr else None,
+                })
+            if any(s["liquido"] or s["leads"] or s["cliques"] for s in serie):
+                out.setdefault(p, {})[canal] = serie
+    return out
+
+
+TREND_FIELDS = ("leads", "vendas", "cpl", "cac", "cliques", "ctr_pct")
+
+
+def _trend_summary(serie, field):
+    """Direção da série de 8 semanas + estabilidade recente, com baseline por MEDIANA.
+
+    Mediana e não média (fix 2026-07-24): com contagem baixa de vendas, um pico
+    único destrói a média e contamina tudo que se compara contra ela.
+    Semanas sem base para a métrica (ex.: CAC numa semana sem venda) entram como
+    None e são ignoradas, em vez de virar zero e fabricar uma queda.
+    """
+    vals = [s.get(field) for s in serie]
+    vals = [v for v in vals if v is not None]
+    n = len(vals)
+    if n < 4:
+        return None
+    half = n // 2
+    m1, m2 = median(vals[:half]), median(vals[half:])
+    delta_pct = round(100 * (m2 - m1) / m1, 1) if m1 else None
+    if delta_pct is None:
+        direcao = "sem_base"
+    elif delta_pct >= 15:
+        direcao = "alta"
+    elif delta_pct <= -15:
+        direcao = "queda"
+    else:
+        direcao = "estavel"
+    base = median(vals)
+    estaveis = 0
+    for v in reversed(vals):
+        if base and abs(v - base) / base <= 0.15:
+            estaveis += 1
+        else:
+            break
+    fmt, quebra = _formato(serie, field, vals, base, direcao)
+    return {
+        "direcao_8sem": direcao,
+        "variacao_pct_1a_vs_2a_metade": delta_pct,
+        "semanas_estaveis_consecutivas": estaveis,
+        "mediana_8sem": round(base, 2),
+        "semanas_com_base": n,
+        "formato": fmt,
+        "semana_da_quebra": quebra,
+        "desvio_atual_vs_mediana_pct": (round(100 * (vals[-1] - base) / base, 1)
+                                        if base else None),
+    }
+
+
+# Limiares da classificação de formato. Chute educado do desenho, rodado contra o
+# histórico real de 8 semanas dos 8 partners (2026-07-24): os valores em si
+# aguentaram, o que precisou de conserto foi a regra de gradual_* (ver abaixo).
+# Recalibrar aqui se a classificação começar a discordar do que o time vê no
+# dashboard — o desenho lista isso como pendência em aberto.
+FMT_SALTO = 0.30      # salto entre semanas consecutivas que caracteriza degrau
+FMT_PLATO = 0.15      # dispersão máxima depois do salto pra ainda ser platô
+FMT_MONOTONIA = 5     # transições (de 7) na mesma direção pra ser gradual
+FMT_RUIDO = 0.40      # desvio-padrão relativo acima disso, sem direção, é ruído
+
+
+def _formato(serie, field, vals, base, direcao):
+    """Classifica o FORMATO da curva, não só a direção.
+
+    `direcao_8sem` compara metade com metade, o que torna indistinguíveis dois
+    casos de diagnóstico oposto:
+    - degrau: caiu de uma vez e ficou parado → algo mudou numa data específica
+      (campanha pausada, verba cortada, segmentação alterada, rastreio quebrado).
+      A ação é descobrir o que mudou naquela semana.
+    - gradual_queda: cai um pouco toda semana → fadiga de criativo ou leilão
+      encarecendo. A ação é rotacionar/relançar.
+    O formato É o diagnóstico.
+    """
+    if len(vals) < 5 or not base:
+        return "sem_base", None
+    # degrau: um salto grande seguido de platô
+    for i in range(1, len(vals) - 1):
+        ant, cur = vals[i - 1], vals[i]
+        if not ant or abs(cur - ant) / abs(ant) < FMT_SALTO:
+            continue
+        depois = vals[i:]
+        pico = max(abs(v) for v in depois) or 1
+        if (max(depois) - min(depois)) / pico <= FMT_PLATO:
+            # a semana do salto, no índice da série que tem valor pra esta métrica
+            ws = [s["ws"] for s in serie if s.get(field) is not None]
+            return "degrau", ws[i] if i < len(ws) else None
+    # gradual: maioria das transições na mesma direção E deslocamento acumulado
+    # que valha a pena. Sem o teste de magnitude, uma curva que oscila ±2% com 5
+    # descidas e 2 subidas virava "gradual_queda" — monotonia sem tamanho não é
+    # tendência, é ruído com sorte.
+    deltas = [b - a for a, b in zip(vals, vals[1:])]
+    sobe = sum(1 for d in deltas if d > 0)
+    desce = sum(1 for d in deltas if d < 0)
+    # gradual_* é um REFINAMENTO da direção, então tem que sair da mesma base que
+    # ela (mediana da 1ª metade vs 2ª). Medir o deslocamento por primeiro-vs-último
+    # ponto dava contradição dentro do mesmo objeto — "gradual_alta" com
+    # "direcao_8sem: queda" — e os dois campos vão juntos pro modelo ler.
+    if sobe >= FMT_MONOTONIA and direcao == "alta":
+        return "gradual_alta", None
+    if desce >= FMT_MONOTONIA and direcao == "queda":
+        return "gradual_queda", None
+    media = sum(vals) / len(vals)
+    if media:
+        dp = (sum((v - media) ** 2 for v in vals) / len(vals)) ** 0.5
+        if dp / abs(media) > FMT_RUIDO:
+            return "ruidoso", None
+    return "estavel", None
+
+
+def build_payload(all_daily, all_dfg, all_dfm, cutoff_dt, valid_partners):
     windows = _window_bounds(cutoff_dt)
 
-    # investimento/leads/vendas por partner × canal × janela (do DAILY_SNAPSHOT)
+    # investimento/leads/vendas por partner × canal × janela (do DAILY_SNAPSHOT).
+    # "conta" = os dois canais somados. É o nível em que as metas de CAC/CPL estão
+    # definidas e em que a triagem julga: com o volume de vendas dessas contas, o
+    # mínimo de base quase nunca é atingido POR CANAL, e sem o agregado uma conta
+    # com CAC de R$986 caía em "sem_base" e sumia do topo da fila.
     invest = {}
     for wkey, (d_ini, d_fim) in windows.items():
         agg = defaultdict(lambda: defaultdict(float))
         for r in all_daily:
             if r["id_mp"] in valid_partners and d_ini <= r["dia"] <= d_fim:
-                k = (r["id_mp"], r["canal"])
-                for f in ("bruto", "cashback", "liquido", "leads", "vendas"):
-                    agg[k][f] += r.get(f) or 0
+                for canal in (r["canal"], "conta"):
+                    for f in ("bruto", "cashback", "liquido", "leads", "vendas"):
+                        agg[(r["id_mp"], canal)][f] += r.get(f) or 0
         for (id_mp, canal), v in agg.items():
             bruto, liq = round(v["bruto"]), round(v["liquido"])
             leads, vendas = int(v["leads"]), int(v["vendas"])
@@ -133,53 +308,26 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
                                      if v.get(de) else None)
                 v["taxas_etapa"] = taxas
 
-    # série semanal (últimas 8 semanas). Crédito/runway fica FORA do payload de
-    # propósito (decisão do Pedro 2026-07-09): já existem alertas dedicados e,
-    # se o dado estiver aqui, o modelo desvia o parecer pra isso.
-    semanal = {p: rows[-8:] for p, rows in partner_weekly_dict.items() if p in valid_partners}
+    # série semanal — 8 últimas semanas COMPLETAS, por partner × canal, derivada do
+    # diário. Crédito/runway fica FORA do payload de propósito (decisão do Pedro
+    # 2026-07-09): já existem alertas dedicados e, se o dado estiver aqui, o modelo
+    # desvia o parecer pra isso.
+    series = weekly_series(all_daily, all_dfg, all_dfm, cutoff_dt, valid_partners)
 
-    # tendência da série semanal calculada aqui — o LLM não extrai de forma
-    # confiável "tendência real vs ruído de 1 semana" de uma lista crua de 8
-    # números. direcao_8sem compara a média da 1ª metade com a da 2ª metade;
-    # semanas_estaveis_consecutivas conta quantas semanas recentes seguidas
-    # ficam dentro de ±15% da média das 8 — sinal de estagnação/fadiga (o
-    # padrão do exemplo "BOM" do prompt: "estável há 6 semanas").
-    def _trend_summary(rows, field):
-        vals = [r.get(field) or 0 for r in rows]
-        n = len(vals)
-        if n < 4:
-            return None
-        half = n // 2
-        first_avg = sum(vals[:half]) / half
-        second_avg = sum(vals[half:]) / (n - half)
-        delta_pct = round(100 * (second_avg - first_avg) / first_avg, 1) if first_avg else None
-        if delta_pct is None:
-            direcao = "sem_base"
-        elif delta_pct >= 15:
-            direcao = "alta"
-        elif delta_pct <= -15:
-            direcao = "queda"
-        else:
-            direcao = "estavel"
-        media_geral = sum(vals) / n
-        semanas_estaveis = 0
-        for v in reversed(vals):
-            if media_geral and abs(v - media_geral) / media_geral <= 0.15:
-                semanas_estaveis += 1
-            else:
-                break
-        return {
-            "direcao_8sem": direcao,
-            "variacao_pct_1a_vs_2a_metade": delta_pct,
-            "semanas_estaveis_consecutivas": semanas_estaveis,
-        }
+    # série crua enxuta (5 campos) só no nível do partner: rede de segurança pro
+    # modelo perceber caso de borda que a classificação de tendência errou. Os
+    # derivados por semana (cpl/cac/ctr) ficam só na tendência, pra não inchar.
+    semanal = {p: [{k: s[k] for k in ("ws", "liquido", "leads", "vendas", "cliques")}
+                   for s in canais["total"]]
+               for p, canais in series.items() if "total" in canais}
 
+    # tendência calculada aqui — o LLM não extrai de forma confiável "tendência
+    # real vs ruído de 1 semana" de uma lista crua de 8 números.
     tendencia_semanal = {}
-    for p, rows in semanal.items():
-        tendencia_semanal[p] = {
-            "leads": _trend_summary(rows, "leads"),
-            "vendas": _trend_summary(rows, "vendas"),
-        }
+    for p, canais in series.items():
+        for canal, serie in canais.items():
+            t = {f: _trend_summary(serie, f) for f in TREND_FIELDS}
+            tendencia_semanal.setdefault(p, {})[canal] = {k: v for k, v in t.items() if v}
 
     # benchmark de pré-clique 30d — comparação com os pares calculada AQUI.
     # Sem isso o modelo ignora ctr/cpc mesmo com instrução explícita (testado
@@ -250,10 +398,22 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
             if pior_detalhe:
                 gargalo_funil.setdefault(id_mp, {})[canal] = pior_detalhe
 
+    # dias_de_dados: do primeiro dia com investimento BRUTO > 0 até o corte.
+    # Satura na poda de 180 dias do all_daily — só importa pro teste de ramp (<14),
+    # onde a poda nunca alcança.
+    dias_de_dados = {}
+    for p in valid_partners:
+        dias_ativos = [r["dia"] for r in all_daily
+                       if r["id_mp"] == p and (r.get("bruto") or 0) > 0
+                       and r["dia"] <= cutoff_dt.isoformat()]
+        dias_de_dados[p] = ((cutoff_dt - date.fromisoformat(min(dias_ativos))).days + 1
+                            if dias_ativos else 0)
+
     return {
         "data_corte": cutoff_dt.isoformat(),
         "janelas": {k: {"inicio": v[0], "fim": v[1]} for k, v in windows.items()},
         "partners": valid_partners,
+        "dias_de_dados_por_partner": dias_de_dados,
         "kpis_por_partner_canal_janela": invest,
         "funil_google_por_partner": funil_google,
         "funil_meta_por_partner": funil_meta,
@@ -262,6 +422,180 @@ def build_payload(all_daily, all_dfg, all_dfm, partner_weekly_dict,
         "benchmark_pre_clique_30d": benchmark,
         "gargalo_funil_30d": gargalo_funil,
     }
+
+
+# ── estágio 0: triagem ────────────────────────────────────────────────────
+#
+# Regra, não julgamento. Os limiares são numéricos e absolutos — comparar número
+# com limiar é o que LLM faz pior e código faz perfeito. Com a triagem aqui, ela
+# para de variar de uma semana pra outra e nenhuma conta em alarme é esquecida
+# porque o modelo economizou atenção.
+
+META = {
+    "CAC_IDEAL": 150,     # <= ideal · 150-200 alerta · > 200 alarme
+    "CAC_ALARME": 200,
+    "CPL_META": 100,      # <= meta · 100-200 alerta · > 200 alarme
+    "CPL_ALARME": 200,    # 2x a meta — suposição, o Pedro definiu só o alerta em 100
+    "MIN_VENDAS": 3,      # base mínima pro CAC ter significado (decisão 2026-07-24)
+    "MIN_LEADS": 10,      # base mínima pro CPL
+    "RAMP_DIAS": 14,
+}
+
+SEV = {"alarme": 0, "atencao": 1, "dado_suspeito": 2, "sem_base": 3, "ramp": 4, "ok": 5}
+
+
+def _gargalo_relevante(g):
+    """False quando os dois desvios estão dentro de ±15%.
+
+    Sem isso o campo SEMPRE existe e até a conta mais saudável do portfólio "tem
+    um gargalo" — um mínimo relativo não é um problema, e o modelo patologiza a
+    melhor conta da carteira.
+    """
+    if not g:
+        return False
+    return any(d is not None and d <= -15
+               for d in (g.get("desvio_vs_pares_pct"), g.get("delta_vs_historico_pct")))
+
+
+def _escada(liq, leads, vendas, cac, cpl, leads_7d, dias):
+    """A escada de julgamento: para no primeiro degrau que o dado sustenta."""
+    if not liq and not leads:
+        return "sem_base", "sem investimento nem lead em 30d", "nenhuma"
+    if dias < META["RAMP_DIAS"]:
+        return "ramp", f"conta com {dias} dias de dados (ramp de {META['RAMP_DIAS']})", "ramp"
+    if liq > 0 and not leads and not leads_7d:
+        return "dado_suspeito", "investimento em 30d sem nenhum lead em 7d e 30d", "nenhuma"
+    if vendas >= META["MIN_VENDAS"] and cac is not None:
+        if cac <= META["CAC_IDEAL"]:
+            return "ok", f"CAC 30d R${cac:.0f} dentro do ideal", "cac"
+        if cac <= META["CAC_ALARME"]:
+            return "atencao", f"CAC 30d R${cac:.0f} na zona de alerta (150-200)", "cac"
+        return "alarme", f"CAC 30d R${cac:.0f} acima do teto de R$200", "cac"
+    if leads >= META["MIN_LEADS"] and cpl is not None:
+        suf = f" (só {vendas} venda(s) em 30d, CAC sem base)"
+        if cpl <= META["CPL_META"]:
+            return "ok", f"CPL 30d R${cpl:.0f} na meta{suf}", "cpl"
+        if cpl <= META["CPL_ALARME"]:
+            return "atencao", f"CPL 30d R${cpl:.0f} acima da meta de R$100{suf}", "cpl"
+        return "alarme", f"CPL 30d R${cpl:.0f} acima do dobro da meta{suf}", "cpl"
+    return ("sem_base",
+            f"{leads} lead(s) e {vendas} venda(s) em 30d — abaixo da base mínima", "nenhuma")
+
+
+def _distancia_meta_pct(base, cac, cpl):
+    if base == "cac" and cac is not None:
+        return round(100 * (cac - META["CAC_ALARME"]) / META["CAC_ALARME"])
+    if base == "cpl" and cpl is not None:
+        return round(100 * (cpl - META["CPL_META"]) / META["CPL_META"])
+    return None
+
+
+def triar(payload):
+    """Status por partner (nível conta) + localização por canal.
+
+    O status vem do agregado da CONTA, não do pior canal: as metas de CAC/CPL do
+    Pedro são definidas nesse nível, e com esse volume de vendas o mínimo de base
+    quase nunca é atingido canal a canal — julgar por canal jogava conta com CAC
+    de R$986 em "sem_base". O canal serve pra localizar onde está o problema, que
+    é exatamente o papel dele na escada (degrau 3 explica, não decide).
+    """
+    kpis = payload.get("kpis_por_partner_canal_janela", {})
+    tend = payload.get("tendencia_semanal_por_partner", {})
+    garg = payload.get("gargalo_funil_30d", {})
+    dias_map = payload.get("dias_de_dados_por_partner", {})
+    partners = payload.get("partners") or list(kpis)
+    out = {}
+
+    for p in partners:
+        dias = dias_map.get(p, 0)
+        niveis = {}
+        for nivel in ("conta", "google", "meta"):
+            w = kpis.get(p, {}).get(nivel, {})
+            j30, j30p, j7 = w.get("30d", {}), w.get("30d_prev", {}), w.get("7d", {})
+            liq = j30.get("investimento_liquido") or 0
+            leads, vendas = j30.get("leads") or 0, j30.get("vendas") or 0
+            cac, cpl = j30.get("cac"), j30.get("cpl")
+            status, motivo, base = _escada(liq, leads, vendas, cac, cpl,
+                                           j7.get("leads") or 0, dias)
+            niveis[nivel] = {
+                "status": status, "motivo": motivo, "base_de_julgamento": base,
+                "cac_30d": cac, "cpl_30d": cpl,
+                "cac_30d_prev": j30p.get("cac"), "cpl_30d_prev": j30p.get("cpl"),
+                "leads_30d": leads, "vendas_30d": vendas,
+                "investimento_liquido_30d": round(liq),
+                "distancia_meta_pct": _distancia_meta_pct(base, cac, cpl),
+                "pct_cashback_30d": j30.get("pct_cashback"),
+                "pct_cashback_30d_prev": j30p.get("pct_cashback"),
+                "cashback_subiu": (j30.get("pct_cashback") > j30p.get("pct_cashback")
+                                   if j30.get("pct_cashback") is not None
+                                   and j30p.get("pct_cashback") is not None else None),
+                # gargalo só conta onde há base: conta sem lead marca -100% em toda
+                # etapa e viraria "gargalo grave" sendo que o problema é não ter dado
+                "gargalo_relevante": (_gargalo_relevante(garg.get(p, {}).get(nivel))
+                                      if base not in ("nenhuma", "ramp") else False),
+            }
+
+        conta = niveis.pop("conta")
+        # canal crítico = o pior canal; empate ou nenhum problema → nenhum
+        piores = sorted(niveis.items(), key=lambda kv: (SEV[kv[1]["status"]],
+                                                        -(kv[1]["distancia_meta_pct"] or 0)))
+        canal_critico = piores[0][0] if SEV[piores[0][1]["status"]] <= SEV["atencao"] else "nenhum"
+
+        # risco de churn: proxy operacional pra "CAC acima de R$200 por 3 semanas
+        # seguidas". CAC semanal com esse volume de vendas é ruído puro, então a
+        # persistência sai da comparação entre as duas janelas de 30d.
+        cac, cac_prev = conta["cac_30d"], conta["cac_30d_prev"]
+        dir_leads = (tend.get(p, {}).get("total", {}).get("leads") or {}).get("direcao_8sem")
+        risco_churn = bool(cac and cac_prev and cac > META["CAC_ALARME"]
+                           and cac_prev > META["CAC_ALARME"]
+                           and dir_leads in ("queda", "estavel"))
+
+        out[p] = {
+            "status_geral": conta["status"],
+            "motivo": conta["motivo"],
+            "base_de_julgamento": conta["base_de_julgamento"],
+            "distancia_meta_pct": conta["distancia_meta_pct"],
+            "dias_de_dados": dias,
+            "conta": conta,
+            "canal_critico": canal_critico,
+            "canais": niveis,
+            "tendencia_leads_8sem": dir_leads,
+            "risco_churn": risco_churn,
+            "motivo_risco_churn": ("CAC acima de R$200 em 30d e em 30d_prev, com leads em "
+                                   "queda ou estáveis no piso") if risco_churn else None,
+        }
+
+    ordem = sorted(out, key=lambda p: (SEV[out[p]["status_geral"]],
+                                       -(out[p]["distancia_meta_pct"] or 0)))
+    return {"metas": META, "ordem_de_prioridade": ordem, "por_partner": out}
+
+
+TRIAGEM_LABEL = {"ok": "OK", "atencao": "Atenção", "alarme": "Alarme",
+                 "sem_base": "Sem base", "dado_suspeito": "Dado suspeito", "ramp": "Ramp"}
+
+
+def render_triagem_html(triagem):
+    """Tabela de triagem do topo do relatório — dado puro, renderizado aqui.
+
+    Fora do LLM de propósito: assim o bloco sai do relatório com uma linha quando
+    o Pedro decidir que não vale a pena, e nunca diverge do que a triagem decidiu.
+    """
+    linhas = []
+    for p in triagem["ordem_de_prioridade"]:
+        v = triagem["por_partner"][p]
+        c = v["conta"]
+        cac = f"R${c['cac_30d']:.0f}" if c["cac_30d"] is not None else "—"
+        cpl = f"R${c['cpl_30d']:.0f}" if c["cpl_30d"] is not None else "—"
+        churn = " ⚠️ risco de churn" if v["risco_churn"] else ""
+        canal = v["canal_critico"] if v["canal_critico"] != "nenhum" else "—"
+        linhas.append(
+            f"<tr><td><strong>{p}</strong></td><td>{TRIAGEM_LABEL[v['status_geral']]}{churn}</td>"
+            f"<td>{cac}</td><td>{cpl}</td><td>{c['vendas_30d']}</td><td>{canal}</td>"
+            f"<td>{v['motivo']}</td></tr>")
+    return ("<h2>Triagem</h2>\n<table><thead><tr><th>Partner</th><th>Status</th>"
+            "<th>CAC 30d</th><th>CPL 30d</th><th>Vendas 30d</th><th>Canal crítico</th>"
+            "<th>Motivo</th></tr></thead>\n<tbody>\n" + "\n".join(linhas) +
+            "\n</tbody></table>\n")
 
 
 # ── prompt ────────────────────────────────────────────────────────────────

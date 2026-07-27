@@ -1,0 +1,933 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Playground v2 — Análise IA MP Agência (pipeline 3 estágios)</title>
+<style>
+  :root { --bd:#dde2e8; --bg:#fff; --fg:#1c2733; --mut:#6b7785; --acc:#1e6fd9; --warn:#b8860b; --err:#c0392b; --ok:#1e8449; --panel:#f7f9fc; }
+  @media (prefers-color-scheme:dark) {
+    :root { --bd:#2b323e; --bg:#151a21; --fg:#e6e9ef; --mut:#8b95a3; --acc:#5b9bf5; --warn:#d4a017; --err:#e74c3c; --ok:#2ecc71; --panel:#1b212a; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:10px 16px; border-bottom:1px solid var(--bd); display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  h1 { font-size:1rem; margin:0; white-space:nowrap; }
+  label { font-size:.78rem; color:var(--mut); display:block; margin-bottom:2px; }
+  select, input[type=text], input[type=password] { padding:5px 7px; border:1px solid var(--bd); border-radius:5px; background:var(--bg); color:var(--fg); font-size:.82rem; }
+  button { padding:6px 13px; border:0; border-radius:5px; background:var(--acc); color:#fff; font-weight:600; cursor:pointer; font-size:.85rem; }
+  button.secondary { background:transparent; color:var(--mut); border:1px solid var(--bd); font-weight:500; }
+  button:disabled { opacity:.5; cursor:default; }
+  main { display:grid; grid-template-columns:1fr 1fr; gap:0; height:calc(100vh - 52px); }
+  .col { display:flex; flex-direction:column; min-width:0; border-right:1px solid var(--bd); }
+  .col:last-child { border-right:0; }
+  .tabs { display:flex; gap:2px; padding:6px 10px 0; border-bottom:1px solid var(--bd); overflow-x:auto; }
+  .tabs button { background:transparent; color:var(--mut); border:0; border-bottom:2px solid transparent; border-radius:0; padding:5px 9px; font-size:.78rem; font-weight:500; white-space:nowrap; }
+  .tabs button.active { color:var(--acc); border-bottom-color:var(--acc); }
+  .pane { flex:1; overflow:auto; display:none; }
+  .pane.active { display:block; }
+  textarea { width:100%; height:100%; border:0; padding:10px 12px; resize:none; font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace; background:transparent; color:var(--fg); outline:none; }
+  pre { margin:0; padding:10px 12px; font:11.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap; word-break:break-word; }
+  .status { padding:6px 14px; border-top:1px solid var(--bd); font-size:.78rem; color:var(--mut); min-height:28px; }
+  .status.error { color:var(--err); }
+  .spinner { display:inline-block; width:10px; height:10px; border:2px solid var(--bd); border-top-color:var(--acc); border-radius:50%; animation:spin .7s linear infinite; vertical-align:-1px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .steps { display:flex; gap:6px; padding:6px 14px; font-size:.74rem; color:var(--mut); border-top:1px solid var(--bd); flex-wrap:wrap; }
+  .steps span { padding:2px 7px; border:1px solid var(--bd); border-radius:10px; }
+  .steps span.run { border-color:var(--acc); color:var(--acc); }
+  .steps span.done { border-color:var(--ok); color:var(--ok); }
+  .steps span.fail { border-color:var(--err); color:var(--err); }
+  table.tri { border-collapse:collapse; width:100%; font-size:.78rem; }
+  table.tri th, table.tri td { border:1px solid var(--bd); padding:4px 7px; text-align:left; }
+  table.tri th { background:var(--panel); position:sticky; top:0; }
+  .b-alarme { color:var(--err); font-weight:700; }
+  .b-atencao { color:var(--warn); font-weight:600; }
+  .b-ok { color:var(--ok); }
+  .b-outro { color:var(--mut); }
+  .chk { padding:10px 14px; }
+  .chk div { padding:3px 0; font-size:.82rem; }
+  .chk .pass::before { content:"OK  "; color:var(--ok); font-weight:700; }
+  .chk .fail::before { content:"X   "; color:var(--err); font-weight:700; }
+  .chk .warn::before { content:"!   "; color:var(--warn); font-weight:700; }
+  .chk h4 { margin:14px 0 4px; font-size:.8rem; text-transform:uppercase; letter-spacing:.4px; color:var(--mut); }
+  .placeholder { padding:20px; color:var(--mut); font-size:.85rem; }
+  iframe { width:100%; height:100%; border:0; background:transparent; }
+  .hint { font-size:.72rem; color:var(--mut); padding:4px 12px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Playground v2 — pipeline 3 estágios</h1>
+  <div><label>provider</label>
+    <select id="provider">
+      <option value="gemini" selected>gemini</option>
+      <option value="openai">openai</option>
+      <option value="anthropic">anthropic</option>
+    </select></div>
+  <div><label>modelo</label>
+    <input id="model" type="text" value="gemini-3.1-pro" list="modelos" size="20">
+    <datalist id="modelos">
+      <option>gemini-3.1-pro</option><option>gemini-2.5-flash</option><option>gemini-2.5-pro</option>
+      <option>gpt-4o</option><option>claude-opus-5</option><option>claude-sonnet-5</option>
+    </datalist></div>
+  <div><label>API key</label><input id="apikey" type="password" placeholder="cole sua chave" autocomplete="off" size="22"></div>
+  <div><label><input type="checkbox" id="rememberKey" style="width:auto"> lembrar</label></div>
+  <button class="secondary" id="resetBtn" title="Volta prompts e payload ao padrão">&#8635; Resetar</button>
+  <button class="secondary" id="run1Btn" title="Roda só triagem + estágio 1">&#9655; Só estágio 1</button>
+  <button id="runBtn">&#9655;&#9655; Rodar tudo</button>
+</header>
+
+<main>
+  <div class="col">
+    <div class="tabs" id="inTabs">
+      <button class="active" data-pane="p-e1">Prompt estágio 1</button>
+      <button data-pane="p-e2">Prompt estágio 2</button>
+      <button data-pane="p-pay">Payload</button>
+      <button data-pane="p-prev">Diagnóstico anterior</button>
+      <button data-pane="p-final">Prompt final enviado</button>
+    </div>
+    <div class="pane active" id="p-e1"><textarea id="promptE1" spellcheck="false"></textarea></div>
+    <div class="pane" id="p-e2"><textarea id="promptE2" spellcheck="false"></textarea></div>
+    <div class="pane" id="p-pay"><textarea id="payloadText" spellcheck="false"></textarea></div>
+    <div class="pane" id="p-prev">
+      <div class="hint">JSON do estágio 1 de uma semana anterior. Vazio = primeira semana (o bloco de continuidade sai). O último run fica salvo — use o botão abaixo.</div>
+      <div style="padding:6px 12px"><button class="secondary" id="useLastBtn">usar diagnóstico do run anterior</button></div>
+      <textarea id="prevText" spellcheck="false" style="height:calc(100% - 70px)"></textarea>
+    </div>
+    <div class="pane" id="p-final"><pre id="finalPrompt" class="placeholder">Rode para ver o prompt final.</pre></div>
+    <div class="steps" id="steps">
+      <span id="s0">0 · triagem</span><span id="s1">1 · diagnóstico</span><span id="s2">2 · redação</span><span id="sv">validação</span>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="tabs" id="outTabs">
+      <button class="active" data-pane="o-tri">Triagem</button>
+      <button data-pane="o-diag">Diagnóstico JSON</button>
+      <button data-pane="o-rel">Relatório</button>
+      <button data-pane="o-slack">Slack</button>
+      <button data-pane="o-chk">Validação</button>
+      <button data-pane="o-raw">Raw</button>
+    </div>
+    <div class="pane active" id="o-tri"><div class="placeholder">Rode para ver a triagem.</div></div>
+    <div class="pane" id="o-diag"><div class="placeholder">—</div></div>
+    <div class="pane" id="o-rel"><div class="placeholder">—</div></div>
+    <div class="pane" id="o-slack"><div class="placeholder">—</div></div>
+    <div class="pane" id="o-chk"><div class="placeholder">—</div></div>
+    <div class="pane" id="o-raw"><div class="placeholder">—</div></div>
+    <div class="status" id="status"></div>
+  </div>
+</main>
+
+<script>
+const DEFAULT_PAYLOAD = "{\"data_corte\":\"2026-07-15\",\"janelas\":{\"7d\":{\"inicio\":\"2026-07-09\",\"fim\":\"2026-07-15\"},\"7d_prev\":{\"inicio\":\"2026-07-02\",\"fim\":\"2026-07-08\"},\"30d\":{\"inicio\":\"2026-06-16\",\"fim\":\"2026-07-15\"},\"30d_prev\":{\"inicio\":\"2026-05-17\",\"fim\":\"2026-06-15\"},\"mes_atual\":{\"inicio\":\"2026-07-01\",\"fim\":\"2026-07-15\"}},\"partners\":[\"loga-internet\",\"the fiber internet\",\"interplus internet\",\"direct internet\",\"ativa-telecom\",\"enove-fibra\",\"ultranet-network\",\"unifique\"],\"dias_de_dados_por_partner\":{\"loga-internet\":164,\"the fiber internet\":97,\"interplus internet\":143,\"direct internet\":91,\"ativa-telecom\":22,\"enove-fibra\":62,\"ultranet-network\":29,\"unifique\":71},\"kpis_por_partner_canal_janela\":{\"ativa-telecom\":{\"google\":{\"7d\":{\"investimento_bruto\":542,\"investimento_liquido\":137,\"cashback\":405,\"pct_cashback\":74.7,\"leads\":4,\"vendas\":2,\"cpl\":34.25,\"cac\":68.5},\"7d_prev\":{\"investimento_bruto\":541,\"investimento_liquido\":15,\"cashback\":526,\"pct_cashback\":97.3,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"30d\":{\"investimento_bruto\":1727,\"investimento_liquido\":43,\"cashback\":1684,\"pct_cashback\":97.5,\"leads\":4,\"vendas\":2,\"cpl\":10.75,\"cac\":21.5},\"30d_prev\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":1160,\"investimento_liquido\":118,\"cashback\":1041,\"pct_cashback\":89.8,\"leads\":4,\"vendas\":2,\"cpl\":29.5,\"cac\":59.0}},\"conta\":{\"7d\":{\"investimento_bruto\":1209,\"investimento_liquido\":256,\"cashback\":953,\"pct_cashback\":78.8,\"leads\":4,\"vendas\":2,\"cpl\":64.0,\"cac\":128.0},\"7d_prev\":{\"investimento_bruto\":1187,\"investimento_liquido\":-17,\"cashback\":1204,\"pct_cashback\":101.4,\"leads\":1,\"vendas\":0,\"cpl\":-17.0,\"cac\":null},\"30d\":{\"investimento_bruto\":3767,\"investimento_liquido\":502,\"cashback\":3265,\"pct_cashback\":86.7,\"leads\":5,\"vendas\":2,\"cpl\":100.4,\"cac\":251.0},\"30d_prev\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":2567,\"investimento_liquido\":202,\"cashback\":2365,\"pct_cashback\":92.1,\"leads\":5,\"vendas\":2,\"cpl\":40.4,\"cac\":101.0}},\"meta\":{\"7d\":{\"investimento_bruto\":667,\"investimento_liquido\":119,\"cashback\":548,\"pct_cashback\":82.2,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"7d_prev\":{\"investimento_bruto\":646,\"investimento_liquido\":-31,\"cashback\":677,\"pct_cashback\":104.8,\"leads\":1,\"vendas\":0,\"cpl\":-31.0,\"cac\":null},\"30d\":{\"investimento_bruto\":2040,\"investimento_liquido\":459,\"cashback\":1581,\"pct_cashback\":77.5,\"leads\":1,\"vendas\":0,\"cpl\":459.0,\"cac\":null},\"30d_prev\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":1408,\"investimento_liquido\":83,\"cashback\":1324,\"pct_cashback\":94.1,\"leads\":1,\"vendas\":0,\"cpl\":83.0,\"cac\":null}}},\"direct internet\":{\"google\":{\"7d\":{\"investimento_bruto\":571,\"investimento_liquido\":597,\"cashback\":-26,\"pct_cashback\":-4.5,\"leads\":7,\"vendas\":5,\"cpl\":85.29,\"cac\":119.4},\"7d_prev\":{\"investimento_bruto\":712,\"investimento_liquido\":600,\"cashback\":113,\"pct_cashback\":15.8,\"leads\":14,\"vendas\":6,\"cpl\":42.86,\"cac\":100.0},\"30d\":{\"investimento_bruto\":2906,\"investimento_liquido\":2608,\"cashback\":298,\"pct_cashback\":10.3,\"leads\":46,\"vendas\":20,\"cpl\":56.7,\"cac\":130.4},\"30d_prev\":{\"investimento_bruto\":2185,\"investimento_liquido\":1917,\"cashback\":268,\"pct_cashback\":12.3,\"leads\":26,\"vendas\":7,\"cpl\":73.73,\"cac\":273.86},\"mes_atual\":{\"investimento_bruto\":1388,\"investimento_liquido\":1272,\"cashback\":116,\"pct_cashback\":8.4,\"leads\":23,\"vendas\":12,\"cpl\":55.3,\"cac\":106.0}},\"conta\":{\"7d\":{\"investimento_bruto\":1200,\"investimento_liquido\":1250,\"cashback\":-50,\"pct_cashback\":-4.1,\"leads\":15,\"vendas\":8,\"cpl\":83.33,\"cac\":156.25},\"7d_prev\":{\"investimento_bruto\":1518,\"investimento_liquido\":1142,\"cashback\":376,\"pct_cashback\":24.8,\"leads\":21,\"vendas\":8,\"cpl\":54.38,\"cac\":142.75},\"30d\":{\"investimento_bruto\":6077,\"investimento_liquido\":5161,\"cashback\":915,\"pct_cashback\":15.1,\"leads\":70,\"vendas\":28,\"cpl\":73.73,\"cac\":184.32},\"30d_prev\":{\"investimento_bruto\":4789,\"investimento_liquido\":3636,\"cashback\":1154,\"pct_cashback\":24.1,\"leads\":39,\"vendas\":7,\"cpl\":93.23,\"cac\":519.43},\"mes_atual\":{\"investimento_bruto\":2946,\"investimento_liquido\":2609,\"cashback\":337,\"pct_cashback\":11.4,\"leads\":38,\"vendas\":17,\"cpl\":68.66,\"cac\":153.47}},\"meta\":{\"7d\":{\"investimento_bruto\":629,\"investimento_liquido\":653,\"cashback\":-24,\"pct_cashback\":-3.8,\"leads\":8,\"vendas\":3,\"cpl\":81.62,\"cac\":217.67},\"7d_prev\":{\"investimento_bruto\":805,\"investimento_liquido\":542,\"cashback\":263,\"pct_cashback\":32.7,\"leads\":7,\"vendas\":2,\"cpl\":77.43,\"cac\":271.0},\"30d\":{\"investimento_bruto\":3171,\"investimento_liquido\":2554,\"cashback\":617,\"pct_cashback\":19.5,\"leads\":24,\"vendas\":8,\"cpl\":106.42,\"cac\":319.25},\"30d_prev\":{\"investimento_bruto\":2604,\"investimento_liquido\":1718,\"cashback\":886,\"pct_cashback\":34.0,\"leads\":13,\"vendas\":0,\"cpl\":132.15,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":1558,\"investimento_liquido\":1337,\"cashback\":220,\"pct_cashback\":14.2,\"leads\":15,\"vendas\":5,\"cpl\":89.13,\"cac\":267.4}}},\"enove-fibra\":{\"google\":{\"7d\":{\"investimento_bruto\":6,\"investimento_liquido\":6,\"cashback\":-1,\"pct_cashback\":-15.0,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"7d_prev\":{\"investimento_bruto\":449,\"investimento_liquido\":336,\"cashback\":113,\"pct_cashback\":25.1,\"leads\":5,\"vendas\":3,\"cpl\":67.2,\"cac\":112.0},\"30d\":{\"investimento_bruto\":1440,\"investimento_liquido\":616,\"cashback\":824,\"pct_cashback\":57.2,\"leads\":5,\"vendas\":3,\"cpl\":123.2,\"cac\":205.33},\"30d_prev\":{\"investimento_bruto\":4080,\"investimento_liquido\":2606,\"cashback\":1473,\"pct_cashback\":36.1,\"leads\":9,\"vendas\":4,\"cpl\":289.56,\"cac\":651.5},\"mes_atual\":{\"investimento_bruto\":540,\"investimento_liquido\":347,\"cashback\":193,\"pct_cashback\":35.7,\"leads\":5,\"vendas\":3,\"cpl\":69.4,\"cac\":115.67}},\"conta\":{\"7d\":{\"investimento_bruto\":32,\"investimento_liquido\":37,\"cashback\":-5,\"pct_cashback\":-15.0,\"leads\":1,\"vendas\":0,\"cpl\":37.0,\"cac\":null},\"7d_prev\":{\"investimento_bruto\":1000,\"investimento_liquido\":762,\"cashback\":238,\"pct_cashback\":23.8,\"leads\":7,\"vendas\":4,\"cpl\":108.86,\"cac\":190.5},\"30d\":{\"investimento_bruto\":3172,\"investimento_liquido\":1925,\"cashback\":1247,\"pct_cashback\":39.3,\"leads\":13,\"vendas\":7,\"cpl\":148.08,\"cac\":275.0},\"30d_prev\":{\"investimento_bruto\":8628,\"investimento_liquido\":4549,\"cashback\":4079,\"pct_cashback\":47.3,\"leads\":13,\"vendas\":5,\"cpl\":349.92,\"cac\":909.8},\"mes_atual\":{\"investimento_bruto\":1217,\"investimento_liquido\":880,\"cashback\":337,\"pct_cashback\":27.7,\"leads\":8,\"vendas\":4,\"cpl\":110.0,\"cac\":220.0}},\"meta\":{\"7d\":{\"investimento_bruto\":26,\"investimento_liquido\":30,\"cashback\":-4,\"pct_cashback\":-15.0,\"leads\":1,\"vendas\":0,\"cpl\":30.0,\"cac\":null},\"7d_prev\":{\"investimento_bruto\":551,\"investimento_liquido\":425,\"cashback\":126,\"pct_cashback\":22.8,\"leads\":2,\"vendas\":1,\"cpl\":212.5,\"cac\":425.0},\"30d\":{\"investimento_bruto\":1732,\"investimento_liquido\":1309,\"cashback\":423,\"pct_cashback\":24.4,\"leads\":8,\"vendas\":4,\"cpl\":163.62,\"cac\":327.25},\"30d_prev\":{\"investimento_bruto\":4548,\"investimento_liquido\":1943,\"cashback\":2605,\"pct_cashback\":57.3,\"leads\":4,\"vendas\":1,\"cpl\":485.75,\"cac\":1943.0},\"mes_atual\":{\"investimento_bruto\":677,\"investimento_liquido\":533,\"cashback\":144,\"pct_cashback\":21.3,\"leads\":3,\"vendas\":1,\"cpl\":177.67,\"cac\":533.0}}},\"loga-internet\":{\"google\":{\"7d\":{\"investimento_bruto\":1019,\"investimento_liquido\":1089,\"cashback\":-69,\"pct_cashback\":-6.8,\"leads\":23,\"vendas\":6,\"cpl\":47.35,\"cac\":181.5},\"7d_prev\":{\"investimento_bruto\":1490,\"investimento_liquido\":1666,\"cashback\":-176,\"pct_cashback\":-11.8,\"leads\":45,\"vendas\":22,\"cpl\":37.02,\"cac\":75.73},\"30d\":{\"investimento_bruto\":5796,\"investimento_liquido\":5729,\"cashback\":67,\"pct_cashback\":1.2,\"leads\":141,\"vendas\":63,\"cpl\":40.63,\"cac\":90.94},\"30d_prev\":{\"investimento_bruto\":6382,\"investimento_liquido\":6420,\"cashback\":-38,\"pct_cashback\":-0.6,\"leads\":135,\"vendas\":59,\"cpl\":47.56,\"cac\":108.81},\"mes_atual\":{\"investimento_bruto\":2721,\"investimento_liquido\":2998,\"cashback\":-278,\"pct_cashback\":-10.2,\"leads\":76,\"vendas\":35,\"cpl\":39.45,\"cac\":85.66}},\"conta\":{\"7d\":{\"investimento_bruto\":1758,\"investimento_liquido\":1566,\"cashback\":192,\"pct_cashback\":10.9,\"leads\":32,\"vendas\":8,\"cpl\":48.94,\"cac\":195.75},\"7d_prev\":{\"investimento_bruto\":2370,\"investimento_liquido\":2356,\"cashback\":14,\"pct_cashback\":0.6,\"leads\":63,\"vendas\":27,\"cpl\":37.4,\"cac\":87.26},\"30d\":{\"investimento_bruto\":9453,\"investimento_liquido\":8376,\"cashback\":1077,\"pct_cashback\":11.4,\"leads\":197,\"vendas\":79,\"cpl\":42.52,\"cac\":106.03},\"30d_prev\":{\"investimento_bruto\":10096,\"investimento_liquido\":8555,\"cashback\":1542,\"pct_cashback\":15.3,\"leads\":203,\"vendas\":85,\"cpl\":42.14,\"cac\":100.65},\"mes_atual\":{\"investimento_bruto\":4484,\"investimento_liquido\":4294,\"cashback\":190,\"pct_cashback\":4.2,\"leads\":105,\"vendas\":44,\"cpl\":40.9,\"cac\":97.59}},\"meta\":{\"7d\":{\"investimento_bruto\":739,\"investimento_liquido\":477,\"cashback\":261,\"pct_cashback\":35.4,\"leads\":9,\"vendas\":2,\"cpl\":53.0,\"cac\":238.5},\"7d_prev\":{\"investimento_bruto\":880,\"investimento_liquido\":690,\"cashback\":190,\"pct_cashback\":21.6,\"leads\":18,\"vendas\":5,\"cpl\":38.33,\"cac\":138.0},\"30d\":{\"investimento_bruto\":3657,\"investimento_liquido\":2647,\"cashback\":1010,\"pct_cashback\":27.6,\"leads\":56,\"vendas\":16,\"cpl\":47.27,\"cac\":165.44},\"30d_prev\":{\"investimento_bruto\":3715,\"investimento_liquido\":2135,\"cashback\":1580,\"pct_cashback\":42.5,\"leads\":68,\"vendas\":26,\"cpl\":31.4,\"cac\":82.12},\"mes_atual\":{\"investimento_bruto\":1763,\"investimento_liquido\":1296,\"cashback\":468,\"pct_cashback\":26.5,\"leads\":29,\"vendas\":9,\"cpl\":44.69,\"cac\":144.0}}},\"the fiber internet\":{\"google\":{\"7d\":{\"investimento_bruto\":533,\"investimento_liquido\":394,\"cashback\":139,\"pct_cashback\":26.1,\"leads\":9,\"vendas\":1,\"cpl\":43.78,\"cac\":394.0},\"7d_prev\":{\"investimento_bruto\":619,\"investimento_liquido\":652,\"cashback\":-33,\"pct_cashback\":-5.3,\"leads\":4,\"vendas\":3,\"cpl\":163.0,\"cac\":217.33},\"30d\":{\"investimento_bruto\":1233,\"investimento_liquido\":1139,\"cashback\":94,\"pct_cashback\":7.6,\"leads\":13,\"vendas\":4,\"cpl\":87.62,\"cac\":284.75},\"30d_prev\":{\"investimento_bruto\":5053,\"investimento_liquido\":4795,\"cashback\":259,\"pct_cashback\":5.1,\"leads\":69,\"vendas\":31,\"cpl\":69.49,\"cac\":154.68},\"mes_atual\":{\"investimento_bruto\":1233,\"investimento_liquido\":1139,\"cashback\":94,\"pct_cashback\":7.6,\"leads\":13,\"vendas\":4,\"cpl\":87.62,\"cac\":284.75}},\"conta\":{\"7d\":{\"investimento_bruto\":860,\"investimento_liquido\":668,\"cashback\":191,\"pct_cashback\":22.3,\"leads\":9,\"vendas\":1,\"cpl\":74.22,\"cac\":668.0},\"7d_prev\":{\"investimento_bruto\":1081,\"investimento_liquido\":1103,\"cashback\":-22,\"pct_cashback\":-2.0,\"leads\":6,\"vendas\":3,\"cpl\":183.83,\"cac\":367.67},\"30d\":{\"investimento_bruto\":2100,\"investimento_liquido\":1955,\"cashback\":146,\"pct_cashback\":6.9,\"leads\":15,\"vendas\":4,\"cpl\":130.33,\"cac\":488.75},\"30d_prev\":{\"investimento_bruto\":11600,\"investimento_liquido\":9918,\"cashback\":1683,\"pct_cashback\":14.5,\"leads\":88,\"vendas\":44,\"cpl\":112.7,\"cac\":225.41},\"mes_atual\":{\"investimento_bruto\":2100,\"investimento_liquido\":1955,\"cashback\":146,\"pct_cashback\":6.9,\"leads\":15,\"vendas\":4,\"cpl\":130.33,\"cac\":488.75}},\"meta\":{\"7d\":{\"investimento_bruto\":327,\"investimento_liquido\":274,\"cashback\":53,\"pct_cashback\":16.1,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"7d_prev\":{\"investimento_bruto\":462,\"investimento_liquido\":451,\"cashback\":11,\"pct_cashback\":2.4,\"leads\":2,\"vendas\":0,\"cpl\":225.5,\"cac\":null},\"30d\":{\"investimento_bruto\":868,\"investimento_liquido\":816,\"cashback\":52,\"pct_cashback\":6.0,\"leads\":2,\"vendas\":0,\"cpl\":408.0,\"cac\":null},\"30d_prev\":{\"investimento_bruto\":6547,\"investimento_liquido\":5123,\"cashback\":1424,\"pct_cashback\":21.7,\"leads\":19,\"vendas\":13,\"cpl\":269.63,\"cac\":394.08},\"mes_atual\":{\"investimento_bruto\":868,\"investimento_liquido\":816,\"cashback\":52,\"pct_cashback\":6.0,\"leads\":2,\"vendas\":0,\"cpl\":408.0,\"cac\":null}}},\"ultranet-network\":{\"google\":{\"7d\":{\"investimento_bruto\":547,\"investimento_liquido\":522,\"cashback\":26,\"pct_cashback\":4.7,\"leads\":6,\"vendas\":2,\"cpl\":87.0,\"cac\":261.0},\"7d_prev\":{\"investimento_bruto\":456,\"investimento_liquido\":350,\"cashback\":106,\"pct_cashback\":23.2,\"leads\":3,\"vendas\":0,\"cpl\":116.67,\"cac\":null},\"30d\":{\"investimento_bruto\":2292,\"investimento_liquido\":1617,\"cashback\":675,\"pct_cashback\":29.4,\"leads\":15,\"vendas\":3,\"cpl\":107.8,\"cac\":539.0},\"30d_prev\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":1069,\"investimento_liquido\":837,\"cashback\":232,\"pct_cashback\":21.7,\"leads\":10,\"vendas\":2,\"cpl\":83.7,\"cac\":418.5}},\"conta\":{\"7d\":{\"investimento_bruto\":947,\"investimento_liquido\":981,\"cashback\":-34,\"pct_cashback\":-3.6,\"leads\":8,\"vendas\":2,\"cpl\":122.62,\"cac\":490.5},\"7d_prev\":{\"investimento_bruto\":826,\"investimento_liquido\":714,\"cashback\":111,\"pct_cashback\":13.5,\"leads\":5,\"vendas\":0,\"cpl\":142.8,\"cac\":null},\"30d\":{\"investimento_bruto\":4538,\"investimento_liquido\":3943,\"cashback\":595,\"pct_cashback\":13.1,\"leads\":23,\"vendas\":4,\"cpl\":171.43,\"cac\":985.75},\"30d_prev\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":1903,\"investimento_liquido\":1736,\"cashback\":168,\"pct_cashback\":8.8,\"leads\":14,\"vendas\":2,\"cpl\":124.0,\"cac\":868.0}},\"meta\":{\"7d\":{\"investimento_bruto\":399,\"investimento_liquido\":459,\"cashback\":-60,\"pct_cashback\":-15.0,\"leads\":2,\"vendas\":0,\"cpl\":229.5,\"cac\":null},\"7d_prev\":{\"investimento_bruto\":369,\"investimento_liquido\":364,\"cashback\":5,\"pct_cashback\":1.5,\"leads\":2,\"vendas\":0,\"cpl\":182.0,\"cac\":null},\"30d\":{\"investimento_bruto\":2246,\"investimento_liquido\":2326,\"cashback\":-79,\"pct_cashback\":-3.5,\"leads\":8,\"vendas\":1,\"cpl\":290.75,\"cac\":2326.0},\"30d_prev\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":834,\"investimento_liquido\":898,\"cashback\":-64,\"pct_cashback\":-7.7,\"leads\":4,\"vendas\":0,\"cpl\":224.5,\"cac\":null}}},\"unifique\":{\"meta\":{\"30d\":{\"investimento_bruto\":1138,\"investimento_liquido\":656,\"cashback\":482,\"pct_cashback\":42.3,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"30d_prev\":{\"investimento_bruto\":2030,\"investimento_liquido\":1593,\"cashback\":436,\"pct_cashback\":21.5,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":51,\"investimento_liquido\":59,\"cashback\":-8,\"pct_cashback\":-15.0,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null}},\"conta\":{\"30d\":{\"investimento_bruto\":2113,\"investimento_liquido\":1389,\"cashback\":724,\"pct_cashback\":34.3,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"30d_prev\":{\"investimento_bruto\":3575,\"investimento_liquido\":3150,\"cashback\":425,\"pct_cashback\":11.9,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":83,\"investimento_liquido\":95,\"cashback\":-12,\"pct_cashback\":-15.0,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null}},\"google\":{\"30d\":{\"investimento_bruto\":975,\"investimento_liquido\":732,\"cashback\":242,\"pct_cashback\":24.9,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"30d_prev\":{\"investimento_bruto\":1545,\"investimento_liquido\":1557,\"cashback\":-11,\"pct_cashback\":-0.7,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":31,\"investimento_liquido\":36,\"cashback\":-5,\"pct_cashback\":-15.0,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null}}},\"interplus internet\":{\"meta\":{\"30d\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"30d_prev\":{\"investimento_bruto\":3078,\"investimento_liquido\":709,\"cashback\":2368,\"pct_cashback\":76.9,\"leads\":3,\"vendas\":0,\"cpl\":236.33,\"cac\":null},\"mes_atual\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null}},\"conta\":{\"30d\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null},\"30d_prev\":{\"investimento_bruto\":5393,\"investimento_liquido\":2479,\"cashback\":2914,\"pct_cashback\":54.0,\"leads\":33,\"vendas\":18,\"cpl\":75.12,\"cac\":137.72},\"mes_atual\":{\"investimento_bruto\":0,\"investimento_liquido\":0,\"cashback\":0,\"pct_cashback\":null,\"leads\":0,\"vendas\":0,\"cpl\":null,\"cac\":null}},\"google\":{\"30d_prev\":{\"investimento_bruto\":2315,\"investimento_liquido\":1769,\"cashback\":546,\"pct_cashback\":23.6,\"leads\":30,\"vendas\":18,\"cpl\":58.97,\"cac\":98.28}}}},\"funil_google_por_partner\":{\"ativa-telecom\":{\"7d\":{\"impressoes\":2218,\"cliques\":132,\"sessoes\":103,\"clickoff\":77,\"redirect\":20,\"leads\":4,\"vendas\":2,\"ctr_pct\":5.95,\"cpc_estimado\":4.11,\"taxas_etapa\":{\"cliques>sessoes\":78.0,\"sessoes>clickoff\":74.8,\"clickoff>redirect\":26.0,\"redirect>leads\":20.0}},\"7d_prev\":{\"impressoes\":2665,\"cliques\":145,\"sessoes\":111,\"clickoff\":54,\"redirect\":18,\"leads\":0,\"vendas\":0,\"ctr_pct\":5.44,\"cpc_estimado\":3.73,\"taxas_etapa\":{\"cliques>sessoes\":76.6,\"sessoes>clickoff\":48.6,\"clickoff>redirect\":33.3,\"redirect>leads\":0.0}},\"30d\":{\"impressoes\":6961,\"cliques\":401,\"sessoes\":316,\"clickoff\":221,\"redirect\":62,\"leads\":4,\"vendas\":2,\"ctr_pct\":5.76,\"cpc_estimado\":4.31,\"taxas_etapa\":{\"cliques>sessoes\":78.8,\"sessoes>clickoff\":69.9,\"clickoff>redirect\":28.1,\"redirect>leads\":6.5}}},\"direct internet\":{\"7d\":{\"impressoes\":2067,\"cliques\":243,\"sessoes\":207,\"clickoff\":43,\"redirect\":11,\"leads\":7,\"vendas\":5,\"ctr_pct\":11.76,\"cpc_estimado\":2.35,\"taxas_etapa\":{\"cliques>sessoes\":85.2,\"sessoes>clickoff\":20.8,\"clickoff>redirect\":25.6,\"redirect>leads\":63.6}},\"7d_prev\":{\"impressoes\":2694,\"cliques\":266,\"sessoes\":230,\"clickoff\":46,\"redirect\":23,\"leads\":14,\"vendas\":6,\"ctr_pct\":9.87,\"cpc_estimado\":2.68,\"taxas_etapa\":{\"cliques>sessoes\":86.5,\"sessoes>clickoff\":20.0,\"clickoff>redirect\":50.0,\"redirect>leads\":60.9}},\"30d\":{\"impressoes\":9858,\"cliques\":995,\"sessoes\":856,\"clickoff\":185,\"redirect\":77,\"leads\":46,\"vendas\":20,\"ctr_pct\":10.09,\"cpc_estimado\":2.92,\"taxas_etapa\":{\"cliques>sessoes\":86.0,\"sessoes>clickoff\":21.6,\"clickoff>redirect\":41.6,\"redirect>leads\":59.7}},\"30d_prev\":{\"impressoes\":6541,\"cliques\":635,\"sessoes\":537,\"clickoff\":104,\"redirect\":48,\"leads\":26,\"vendas\":7,\"ctr_pct\":9.71,\"cpc_estimado\":3.44,\"taxas_etapa\":{\"cliques>sessoes\":84.6,\"sessoes>clickoff\":19.4,\"clickoff>redirect\":46.2,\"redirect>leads\":54.2}}},\"enove-fibra\":{\"7d\":{\"impressoes\":55,\"cliques\":2,\"sessoes\":7,\"clickoff\":0,\"redirect\":0,\"leads\":0,\"vendas\":0,\"ctr_pct\":3.64,\"cpc_estimado\":3.0,\"taxas_etapa\":{\"cliques>sessoes\":350.0,\"sessoes>clickoff\":0.0,\"clickoff>redirect\":null,\"redirect>leads\":null}},\"7d_prev\":{\"impressoes\":2797,\"cliques\":125,\"sessoes\":106,\"clickoff\":34,\"redirect\":9,\"leads\":5,\"vendas\":3,\"ctr_pct\":4.47,\"cpc_estimado\":3.59,\"taxas_etapa\":{\"cliques>sessoes\":84.8,\"sessoes>clickoff\":32.1,\"clickoff>redirect\":26.5,\"redirect>leads\":55.6}},\"30d\":{\"impressoes\":7896,\"cliques\":353,\"sessoes\":320,\"clickoff\":108,\"redirect\":33,\"leads\":5,\"vendas\":3,\"ctr_pct\":4.47,\"cpc_estimado\":4.08,\"taxas_etapa\":{\"cliques>sessoes\":90.7,\"sessoes>clickoff\":33.8,\"clickoff>redirect\":30.6,\"redirect>leads\":15.2}},\"30d_prev\":{\"impressoes\":12334,\"cliques\":610,\"sessoes\":431,\"clickoff\":245,\"redirect\":66,\"leads\":9,\"vendas\":4,\"ctr_pct\":4.95,\"cpc_estimado\":6.69,\"taxas_etapa\":{\"cliques>sessoes\":70.7,\"sessoes>clickoff\":56.8,\"clickoff>redirect\":26.9,\"redirect>leads\":13.6}}},\"loga-internet\":{\"7d\":{\"impressoes\":2006,\"cliques\":137,\"sessoes\":128,\"clickoff\":64,\"redirect\":35,\"leads\":23,\"vendas\":6,\"ctr_pct\":6.83,\"cpc_estimado\":7.44,\"taxas_etapa\":{\"cliques>sessoes\":93.4,\"sessoes>clickoff\":50.0,\"clickoff>redirect\":54.7,\"redirect>leads\":65.7}},\"7d_prev\":{\"impressoes\":2803,\"cliques\":249,\"sessoes\":202,\"clickoff\":95,\"redirect\":53,\"leads\":45,\"vendas\":22,\"ctr_pct\":8.88,\"cpc_estimado\":5.98,\"taxas_etapa\":{\"cliques>sessoes\":81.1,\"sessoes>clickoff\":47.0,\"clickoff>redirect\":55.8,\"redirect>leads\":84.9}},\"30d\":{\"impressoes\":9562,\"cliques\":865,\"sessoes\":733,\"clickoff\":371,\"redirect\":184,\"leads\":141,\"vendas\":63,\"ctr_pct\":9.05,\"cpc_estimado\":6.7,\"taxas_etapa\":{\"cliques>sessoes\":84.7,\"sessoes>clickoff\":50.6,\"clickoff>redirect\":49.6,\"redirect>leads\":76.6}},\"30d_prev\":{\"impressoes\":5731,\"cliques\":623,\"sessoes\":564,\"clickoff\":286,\"redirect\":163,\"leads\":135,\"vendas\":59,\"ctr_pct\":10.87,\"cpc_estimado\":10.24,\"taxas_etapa\":{\"cliques>sessoes\":90.5,\"sessoes>clickoff\":50.7,\"clickoff>redirect\":57.0,\"redirect>leads\":82.8}}},\"the fiber internet\":{\"7d\":{\"impressoes\":1441,\"cliques\":130,\"sessoes\":107,\"clickoff\":47,\"redirect\":19,\"leads\":9,\"vendas\":1,\"ctr_pct\":9.02,\"cpc_estimado\":4.1,\"taxas_etapa\":{\"cliques>sessoes\":82.3,\"sessoes>clickoff\":43.9,\"clickoff>redirect\":40.4,\"redirect>leads\":47.4}},\"7d_prev\":{\"impressoes\":938,\"cliques\":108,\"sessoes\":86,\"clickoff\":38,\"redirect\":21,\"leads\":4,\"vendas\":3,\"ctr_pct\":11.51,\"cpc_estimado\":5.73,\"taxas_etapa\":{\"cliques>sessoes\":79.6,\"sessoes>clickoff\":44.2,\"clickoff>redirect\":55.3,\"redirect>leads\":19.0}},\"30d\":{\"impressoes\":2467,\"cliques\":242,\"sessoes\":198,\"clickoff\":86,\"redirect\":41,\"leads\":13,\"vendas\":4,\"ctr_pct\":9.81,\"cpc_estimado\":5.1,\"taxas_etapa\":{\"cliques>sessoes\":81.8,\"sessoes>clickoff\":43.4,\"clickoff>redirect\":47.7,\"redirect>leads\":31.7}},\"30d_prev\":{\"impressoes\":6856,\"cliques\":791,\"sessoes\":720,\"clickoff\":382,\"redirect\":140,\"leads\":69,\"vendas\":31,\"ctr_pct\":11.54,\"cpc_estimado\":6.39,\"taxas_etapa\":{\"cliques>sessoes\":91.0,\"sessoes>clickoff\":53.1,\"clickoff>redirect\":36.6,\"redirect>leads\":49.3}}},\"ultranet-network\":{\"7d\":{\"impressoes\":1645,\"cliques\":138,\"sessoes\":113,\"clickoff\":67,\"redirect\":11,\"leads\":6,\"vendas\":2,\"ctr_pct\":8.39,\"cpc_estimado\":3.96,\"taxas_etapa\":{\"cliques>sessoes\":81.9,\"sessoes>clickoff\":59.3,\"clickoff>redirect\":16.4,\"redirect>leads\":54.5}},\"7d_prev\":{\"impressoes\":1640,\"cliques\":122,\"sessoes\":92,\"clickoff\":33,\"redirect\":6,\"leads\":3,\"vendas\":0,\"ctr_pct\":7.44,\"cpc_estimado\":3.74,\"taxas_etapa\":{\"cliques>sessoes\":75.4,\"sessoes>clickoff\":35.9,\"clickoff>redirect\":18.2,\"redirect>leads\":50.0}},\"30d\":{\"impressoes\":7195,\"cliques\":506,\"sessoes\":396,\"clickoff\":174,\"redirect\":41,\"leads\":15,\"vendas\":3,\"ctr_pct\":7.03,\"cpc_estimado\":4.53,\"taxas_etapa\":{\"cliques>sessoes\":78.3,\"sessoes>clickoff\":43.9,\"clickoff>redirect\":23.6,\"redirect>leads\":36.6}}},\"interplus internet\":{\"7d_prev\":{\"impressoes\":0,\"cliques\":0,\"sessoes\":1,\"clickoff\":0,\"redirect\":0,\"leads\":0,\"vendas\":0,\"ctr_pct\":null,\"cpc_estimado\":null,\"taxas_etapa\":{\"cliques>sessoes\":null,\"sessoes>clickoff\":0.0,\"clickoff>redirect\":null,\"redirect>leads\":null}},\"30d\":{\"impressoes\":0,\"cliques\":0,\"sessoes\":2,\"clickoff\":0,\"redirect\":0,\"leads\":0,\"vendas\":0,\"ctr_pct\":null,\"cpc_estimado\":null,\"taxas_etapa\":{\"cliques>sessoes\":null,\"sessoes>clickoff\":0.0,\"clickoff>redirect\":null,\"redirect>leads\":null}},\"30d_prev\":{\"impressoes\":3780,\"cliques\":340,\"sessoes\":304,\"clickoff\":176,\"redirect\":60,\"leads\":30,\"vendas\":18,\"ctr_pct\":8.99,\"cpc_estimado\":6.81,\"taxas_etapa\":{\"cliques>sessoes\":89.4,\"sessoes>clickoff\":57.9,\"clickoff>redirect\":34.1,\"redirect>leads\":50.0}}},\"unifique\":{\"30d\":{\"impressoes\":5492,\"cliques\":281,\"sessoes\":225,\"clickoff\":60,\"redirect\":12,\"leads\":1,\"vendas\":0,\"ctr_pct\":5.12,\"cpc_estimado\":3.47,\"taxas_etapa\":{\"cliques>sessoes\":80.1,\"sessoes>clickoff\":26.7,\"clickoff>redirect\":20.0,\"redirect>leads\":8.3}},\"30d_prev\":{\"impressoes\":4254,\"cliques\":315,\"sessoes\":255,\"clickoff\":90,\"redirect\":27,\"leads\":5,\"vendas\":1,\"ctr_pct\":7.4,\"cpc_estimado\":4.9,\"taxas_etapa\":{\"cliques>sessoes\":81.0,\"sessoes>clickoff\":35.3,\"clickoff>redirect\":30.0,\"redirect>leads\":18.5}}}},\"funil_meta_por_partner\":{\"ativa-telecom\":{\"7d\":{\"impressoes\":13814.0,\"cliques\":109.0,\"chat_start\":46,\"zip_search\":35,\"redirect\":35,\"leads\":0,\"vendas\":0,\"ctr_pct\":0.79,\"cpc_estimado\":6.12,\"taxas_etapa\":{\"cliques>chat_start\":42.2,\"chat_start>zip_search\":76.1,\"zip_search>redirect\":100.0,\"redirect>leads\":0.0}},\"7d_prev\":{\"impressoes\":14769.0,\"cliques\":133.0,\"chat_start\":40,\"zip_search\":34,\"redirect\":27,\"leads\":1,\"vendas\":0,\"ctr_pct\":0.9,\"cpc_estimado\":4.86,\"taxas_etapa\":{\"cliques>chat_start\":30.1,\"chat_start>zip_search\":85.0,\"zip_search>redirect\":79.4,\"redirect>leads\":3.7}},\"30d\":{\"impressoes\":43455.0,\"cliques\":324.0,\"chat_start\":118,\"zip_search\":92,\"redirect\":74,\"leads\":1,\"vendas\":0,\"ctr_pct\":0.75,\"cpc_estimado\":6.3,\"taxas_etapa\":{\"cliques>chat_start\":36.4,\"chat_start>zip_search\":78.0,\"zip_search>redirect\":80.4,\"redirect>leads\":1.4}}},\"direct internet\":{\"7d\":{\"impressoes\":16583.0,\"cliques\":86.0,\"chat_start\":29,\"zip_search\":24,\"redirect\":18,\"leads\":8,\"vendas\":3,\"ctr_pct\":0.52,\"cpc_estimado\":7.31,\"taxas_etapa\":{\"cliques>chat_start\":33.7,\"chat_start>zip_search\":82.8,\"zip_search>redirect\":75.0,\"redirect>leads\":44.4}},\"7d_prev\":{\"impressoes\":8257.0,\"cliques\":66.0,\"chat_start\":35,\"zip_search\":29,\"redirect\":20,\"leads\":7,\"vendas\":2,\"ctr_pct\":0.8,\"cpc_estimado\":12.2,\"taxas_etapa\":{\"cliques>chat_start\":53.0,\"chat_start>zip_search\":82.9,\"zip_search>redirect\":69.0,\"redirect>leads\":35.0}},\"30d\":{\"impressoes\":46203.0,\"cliques\":321.0,\"chat_start\":123,\"zip_search\":114,\"redirect\":71,\"leads\":24,\"vendas\":8,\"ctr_pct\":0.69,\"cpc_estimado\":9.88,\"taxas_etapa\":{\"cliques>chat_start\":38.3,\"chat_start>zip_search\":92.7,\"zip_search>redirect\":62.3,\"redirect>leads\":33.8}},\"30d_prev\":{\"impressoes\":57464.0,\"cliques\":507.0,\"chat_start\":226,\"zip_search\":160,\"redirect\":77,\"leads\":13,\"vendas\":0,\"ctr_pct\":0.88,\"cpc_estimado\":5.14,\"taxas_etapa\":{\"cliques>chat_start\":44.6,\"chat_start>zip_search\":70.8,\"zip_search>redirect\":48.1,\"redirect>leads\":16.9}}},\"enove-fibra\":{\"7d\":{\"impressoes\":944.0,\"cliques\":6.0,\"chat_start\":5,\"zip_search\":3,\"redirect\":1,\"leads\":1,\"vendas\":0,\"ctr_pct\":0.64,\"cpc_estimado\":4.33,\"taxas_etapa\":{\"cliques>chat_start\":83.3,\"chat_start>zip_search\":60.0,\"zip_search>redirect\":33.3,\"redirect>leads\":100.0}},\"7d_prev\":{\"impressoes\":28350.0,\"cliques\":128.0,\"chat_start\":15,\"zip_search\":11,\"redirect\":7,\"leads\":2,\"vendas\":1,\"ctr_pct\":0.45,\"cpc_estimado\":4.3,\"taxas_etapa\":{\"cliques>chat_start\":11.7,\"chat_start>zip_search\":73.3,\"zip_search>redirect\":63.6,\"redirect>leads\":28.6}},\"30d\":{\"impressoes\":89318.0,\"cliques\":378.0,\"chat_start\":56,\"zip_search\":36,\"redirect\":24,\"leads\":8,\"vendas\":4,\"ctr_pct\":0.42,\"cpc_estimado\":4.58,\"taxas_etapa\":{\"cliques>chat_start\":14.8,\"chat_start>zip_search\":64.3,\"zip_search>redirect\":66.7,\"redirect>leads\":33.3}},\"30d_prev\":{\"impressoes\":182641.0,\"cliques\":953.0,\"chat_start\":183,\"zip_search\":170,\"redirect\":92,\"leads\":4,\"vendas\":1,\"ctr_pct\":0.52,\"cpc_estimado\":4.77,\"taxas_etapa\":{\"cliques>chat_start\":19.2,\"chat_start>zip_search\":92.9,\"zip_search>redirect\":54.1,\"redirect>leads\":4.3}}},\"loga-internet\":{\"7d\":{\"impressoes\":21323.0,\"cliques\":183.0,\"chat_start\":75,\"zip_search\":55,\"redirect\":18,\"leads\":9,\"vendas\":2,\"ctr_pct\":0.86,\"cpc_estimado\":4.04,\"taxas_etapa\":{\"cliques>chat_start\":41.0,\"chat_start>zip_search\":73.3,\"zip_search>redirect\":32.7,\"redirect>leads\":50.0}},\"7d_prev\":{\"impressoes\":25770.0,\"cliques\":225.0,\"chat_start\":82,\"zip_search\":48,\"redirect\":25,\"leads\":18,\"vendas\":5,\"ctr_pct\":0.87,\"cpc_estimado\":3.91,\"taxas_etapa\":{\"cliques>chat_start\":36.4,\"chat_start>zip_search\":58.5,\"zip_search>redirect\":52.1,\"redirect>leads\":72.0}},\"30d\":{\"impressoes\":108550.0,\"cliques\":932.0,\"chat_start\":359,\"zip_search\":229,\"redirect\":94,\"leads\":56,\"vendas\":16,\"ctr_pct\":0.86,\"cpc_estimado\":3.92,\"taxas_etapa\":{\"cliques>chat_start\":38.5,\"chat_start>zip_search\":63.8,\"zip_search>redirect\":41.0,\"redirect>leads\":59.6}},\"30d_prev\":{\"impressoes\":121552.0,\"cliques\":946.0,\"chat_start\":340,\"zip_search\":241,\"redirect\":110,\"leads\":68,\"vendas\":26,\"ctr_pct\":0.78,\"cpc_estimado\":3.93,\"taxas_etapa\":{\"cliques>chat_start\":35.9,\"chat_start>zip_search\":70.9,\"zip_search>redirect\":45.6,\"redirect>leads\":61.8}}},\"the fiber internet\":{\"7d\":{\"impressoes\":6285.0,\"cliques\":41.0,\"chat_start\":9,\"zip_search\":6,\"redirect\":3,\"leads\":0,\"vendas\":0,\"ctr_pct\":0.65,\"cpc_estimado\":7.98,\"taxas_etapa\":{\"cliques>chat_start\":22.0,\"chat_start>zip_search\":66.7,\"zip_search>redirect\":50.0,\"redirect>leads\":0.0}},\"7d_prev\":{\"impressoes\":8378.0,\"cliques\":46.0,\"chat_start\":10,\"zip_search\":7,\"redirect\":6,\"leads\":2,\"vendas\":0,\"ctr_pct\":0.55,\"cpc_estimado\":10.04,\"taxas_etapa\":{\"cliques>chat_start\":21.7,\"chat_start>zip_search\":70.0,\"zip_search>redirect\":85.7,\"redirect>leads\":33.3}},\"30d\":{\"impressoes\":17085.0,\"cliques\":100.0,\"chat_start\":26,\"zip_search\":14,\"redirect\":10,\"leads\":2,\"vendas\":0,\"ctr_pct\":0.59,\"cpc_estimado\":8.68,\"taxas_etapa\":{\"cliques>chat_start\":26.0,\"chat_start>zip_search\":53.8,\"zip_search>redirect\":71.4,\"redirect>leads\":20.0}},\"30d_prev\":{\"impressoes\":90282.0,\"cliques\":629.0,\"chat_start\":204,\"zip_search\":119,\"redirect\":102,\"leads\":19,\"vendas\":13,\"ctr_pct\":0.7,\"cpc_estimado\":10.41,\"taxas_etapa\":{\"cliques>chat_start\":32.4,\"chat_start>zip_search\":58.3,\"zip_search>redirect\":85.7,\"redirect>leads\":18.6}}},\"ultranet-network\":{\"7d\":{\"impressoes\":10279.0,\"cliques\":83.0,\"chat_start\":33,\"zip_search\":22,\"redirect\":2,\"leads\":2,\"vendas\":0,\"ctr_pct\":0.81,\"cpc_estimado\":4.81,\"taxas_etapa\":{\"cliques>chat_start\":39.8,\"chat_start>zip_search\":66.7,\"zip_search>redirect\":9.1,\"redirect>leads\":100.0}},\"7d_prev\":{\"impressoes\":16036.0,\"cliques\":99.0,\"chat_start\":14,\"zip_search\":8,\"redirect\":5,\"leads\":2,\"vendas\":0,\"ctr_pct\":0.62,\"cpc_estimado\":3.73,\"taxas_etapa\":{\"cliques>chat_start\":14.1,\"chat_start>zip_search\":57.1,\"zip_search>redirect\":62.5,\"redirect>leads\":40.0}},\"30d\":{\"impressoes\":87285.0,\"cliques\":509.0,\"chat_start\":94,\"zip_search\":50,\"redirect\":18,\"leads\":8,\"vendas\":1,\"ctr_pct\":0.58,\"cpc_estimado\":4.41,\"taxas_etapa\":{\"cliques>chat_start\":18.5,\"chat_start>zip_search\":53.2,\"zip_search>redirect\":36.0,\"redirect>leads\":44.4}}},\"interplus internet\":{\"7d_prev\":{\"impressoes\":0,\"cliques\":0,\"chat_start\":1,\"zip_search\":0,\"redirect\":0,\"leads\":0,\"vendas\":0,\"ctr_pct\":null,\"cpc_estimado\":null,\"taxas_etapa\":{\"cliques>chat_start\":null,\"chat_start>zip_search\":0.0,\"zip_search>redirect\":null,\"redirect>leads\":null}},\"30d\":{\"impressoes\":0,\"cliques\":0,\"chat_start\":1,\"zip_search\":0,\"redirect\":0,\"leads\":0,\"vendas\":0,\"ctr_pct\":null,\"cpc_estimado\":null,\"taxas_etapa\":{\"cliques>chat_start\":null,\"chat_start>zip_search\":0.0,\"zip_search>redirect\":null,\"redirect>leads\":null}},\"30d_prev\":{\"impressoes\":60017.0,\"cliques\":445.0,\"chat_start\":162,\"zip_search\":119,\"redirect\":84,\"leads\":3,\"vendas\":0,\"ctr_pct\":0.74,\"cpc_estimado\":6.92,\"taxas_etapa\":{\"cliques>chat_start\":36.4,\"chat_start>zip_search\":73.5,\"zip_search>redirect\":70.6,\"redirect>leads\":3.6}}},\"unifique\":{\"30d\":{\"impressoes\":20040.0,\"cliques\":130.0,\"chat_start\":37,\"zip_search\":36,\"redirect\":19,\"leads\":0,\"vendas\":0,\"ctr_pct\":0.65,\"cpc_estimado\":8.75,\"taxas_etapa\":{\"cliques>chat_start\":28.5,\"chat_start>zip_search\":97.3,\"zip_search>redirect\":52.8,\"redirect>leads\":0.0}},\"30d_prev\":{\"impressoes\":38604.0,\"cliques\":207.0,\"chat_start\":67,\"zip_search\":54,\"redirect\":47,\"leads\":10,\"vendas\":1,\"ctr_pct\":0.54,\"cpc_estimado\":9.81,\"taxas_etapa\":{\"cliques>chat_start\":32.4,\"chat_start>zip_search\":80.6,\"zip_search>redirect\":87.0,\"redirect>leads\":21.3}}}},\"serie_semanal_por_partner\":{\"loga-internet\":[{\"ws\":\"2026-05-18\",\"liquido\":2130,\"leads\":45,\"vendas\":18,\"cliques\":321},{\"ws\":\"2026-05-25\",\"liquido\":1973,\"leads\":49,\"vendas\":20,\"cliques\":317},{\"ws\":\"2026-06-01\",\"liquido\":1763,\"leads\":49,\"vendas\":19,\"cliques\":361},{\"ws\":\"2026-06-08\",\"liquido\":1989,\"leads\":47,\"vendas\":23,\"cliques\":435},{\"ws\":\"2026-06-15\",\"liquido\":1458,\"leads\":39,\"vendas\":12,\"cliques\":409},{\"ws\":\"2026-06-22\",\"liquido\":2127,\"leads\":49,\"vendas\":19,\"cliques\":462},{\"ws\":\"2026-06-29\",\"liquido\":2426,\"leads\":56,\"vendas\":29,\"cliques\":444},{\"ws\":\"2026-07-06\",\"liquido\":2008,\"leads\":49,\"vendas\":19,\"cliques\":435}],\"the fiber internet\":[{\"ws\":\"2026-05-18\",\"liquido\":2427,\"leads\":30,\"vendas\":18,\"cliques\":356},{\"ws\":\"2026-05-25\",\"liquido\":2938,\"leads\":27,\"vendas\":14,\"cliques\":376},{\"ws\":\"2026-06-01\",\"liquido\":2346,\"leads\":14,\"vendas\":5,\"cliques\":404},{\"ws\":\"2026-06-08\",\"liquido\":1668,\"leads\":15,\"vendas\":7,\"cliques\":234},{\"ws\":\"2026-06-15\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-22\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-29\",\"liquido\":888,\"leads\":1,\"vendas\":0,\"cliques\":104},{\"ws\":\"2026-07-06\",\"liquido\":766,\"leads\":9,\"vendas\":4,\"cliques\":155}],\"interplus internet\":[{\"ws\":\"2026-05-18\",\"liquido\":660,\"leads\":12,\"vendas\":8,\"cliques\":242},{\"ws\":\"2026-05-25\",\"liquido\":581,\"leads\":12,\"vendas\":7,\"cliques\":251},{\"ws\":\"2026-06-01\",\"liquido\":895,\"leads\":6,\"vendas\":3,\"cliques\":226},{\"ws\":\"2026-06-08\",\"liquido\":149,\"leads\":2,\"vendas\":0,\"cliques\":32},{\"ws\":\"2026-06-15\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-22\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-29\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-07-06\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0}],\"direct internet\":[{\"ws\":\"2026-05-18\",\"liquido\":812,\"leads\":7,\"vendas\":2,\"cliques\":320},{\"ws\":\"2026-05-25\",\"liquido\":1112,\"leads\":0,\"vendas\":0,\"cliques\":337},{\"ws\":\"2026-06-01\",\"liquido\":1224,\"leads\":29,\"vendas\":5,\"cliques\":394},{\"ws\":\"2026-06-08\",\"liquido\":270,\"leads\":1,\"vendas\":0,\"cliques\":46},{\"ws\":\"2026-06-15\",\"liquido\":1166,\"leads\":11,\"vendas\":5,\"cliques\":234},{\"ws\":\"2026-06-22\",\"liquido\":1059,\"leads\":14,\"vendas\":5,\"cliques\":261},{\"ws\":\"2026-06-29\",\"liquido\":1157,\"leads\":25,\"vendas\":8,\"cliques\":344},{\"ws\":\"2026-07-06\",\"liquido\":1158,\"leads\":12,\"vendas\":6,\"cliques\":309}],\"ativa-telecom\":[{\"ws\":\"2026-05-18\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-05-25\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-01\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-08\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-15\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-22\",\"liquido\":341,\"leads\":0,\"vendas\":0,\"cliques\":118},{\"ws\":\"2026-06-29\",\"liquido\":54,\"leads\":1,\"vendas\":0,\"cliques\":231},{\"ws\":\"2026-07-06\",\"liquido\":271,\"leads\":1,\"vendas\":0,\"cliques\":279}],\"enove-fibra\":[{\"ws\":\"2026-05-18\",\"liquido\":507,\"leads\":0,\"vendas\":0,\"cliques\":284},{\"ws\":\"2026-05-25\",\"liquido\":1147,\"leads\":6,\"vendas\":3,\"cliques\":416},{\"ws\":\"2026-06-01\",\"liquido\":1419,\"leads\":4,\"vendas\":0,\"cliques\":483},{\"ws\":\"2026-06-08\",\"liquido\":1298,\"leads\":3,\"vendas\":2,\"cliques\":325},{\"ws\":\"2026-06-15\",\"liquido\":289,\"leads\":1,\"vendas\":0,\"cliques\":113},{\"ws\":\"2026-06-22\",\"liquido\":491,\"leads\":2,\"vendas\":1,\"cliques\":232},{\"ws\":\"2026-06-29\",\"liquido\":804,\"leads\":4,\"vendas\":3,\"cliques\":284},{\"ws\":\"2026-07-06\",\"liquido\":340,\"leads\":6,\"vendas\":3,\"cliques\":102}],\"ultranet-network\":[{\"ws\":\"2026-05-18\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-05-25\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-01\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-08\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-15\",\"liquido\":1105,\"leads\":4,\"vendas\":1,\"cliques\":221},{\"ws\":\"2026-06-22\",\"liquido\":880,\"leads\":5,\"vendas\":1,\"cliques\":246},{\"ws\":\"2026-06-29\",\"liquido\":638,\"leads\":2,\"vendas\":0,\"cliques\":236},{\"ws\":\"2026-07-06\",\"liquido\":867,\"leads\":8,\"vendas\":2,\"cliques\":210}],\"unifique\":[{\"ws\":\"2026-05-18\",\"liquido\":2285,\"leads\":0,\"vendas\":0,\"cliques\":384},{\"ws\":\"2026-05-25\",\"liquido\":865,\"leads\":0,\"vendas\":0,\"cliques\":138},{\"ws\":\"2026-06-01\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-08\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0},{\"ws\":\"2026-06-15\",\"liquido\":791,\"leads\":0,\"vendas\":0,\"cliques\":169},{\"ws\":\"2026-06-22\",\"liquido\":437,\"leads\":0,\"vendas\":0,\"cliques\":178},{\"ws\":\"2026-06-29\",\"liquido\":160,\"leads\":0,\"vendas\":0,\"cliques\":64},{\"ws\":\"2026-07-06\",\"liquido\":0,\"leads\":0,\"vendas\":0,\"cliques\":0}]},\"tendencia_semanal_por_partner\":{\"loga-internet\":{\"total\":{\"leads\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":2.1,\"semanas_estaveis_consecutivas\":3,\"mediana_8sem\":49.0,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"vendas\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-2.6,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":19.0,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"cpl\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":2.1,\"semanas_estaveis_consecutivas\":8,\"mediana_8sem\":41.65,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-1.6},\"cac\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":13.7,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":102.17,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":3.4},\"cliques\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":28.9,\"semanas_estaveis_consecutivas\":6,\"mediana_8sem\":422.0,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":3.1},\"ctr_pct\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":27.8,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.38,\"semanas_com_base\":8,\"formato\":\"gradual_alta\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":18.1}},\"google\":{\"leads\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":12.7,\"semanas_estaveis_consecutivas\":4,\"mediana_8sem\":35.0,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"vendas\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":13.8,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":15.5,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-3.2},\"cpl\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-21.9,\"semanas_estaveis_consecutivas\":4,\"mediana_8sem\":40.33,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-15\",\"desvio_atual_vs_mediana_pct\":0.4},\"cac\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-20.5,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":97.36,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-3.0},\"cliques\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":57.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":190.5,\"semanas_com_base\":8,\"formato\":\"gradual_alta\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":17.1},\"ctr_pct\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-18.2,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":9.82,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-15.2}},\"meta\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-15.6,\"semanas_estaveis_consecutivas\":3,\"mediana_8sem\":14.0,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"vendas\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-30.0,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":4.0,\"semanas_com_base\":8,\"formato\":\"gradual_queda\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"cpl\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":85.6,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":38.69,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":9.1},\"cac\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":36.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":113.56,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":30.1},\"cliques\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":4.0,\"semanas_estaveis_consecutivas\":4,\"mediana_8sem\":215.0,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-1.4},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":9.6,\"semanas_estaveis_consecutivas\":8,\"mediana_8sem\":0.81,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":9.3}}},\"the fiber internet\":{\"total\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-97.6,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":11.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-21.7},\"vendas\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":4.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-11.1},\"cpl\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":2.2,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":110.0,\"semanas_com_base\":6,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-22.6},\"cac\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":38.3,\"semanas_estaveis_consecutivas\":2,\"mediana_8sem\":209.86,\"semanas_com_base\":5,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-8.7},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-85.8,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":194.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-20.3},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-2.5,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.56,\"semanas_com_base\":6,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":56.4}},\"google\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":9.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-11.1},\"vendas\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":3.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":14.3},\"cpl\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":21.2,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":66.29,\"semanas_com_base\":5,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-7.0},\"cac\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":111.5,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":123.25,\"semanas_com_base\":5,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-85.7,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":124.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-2.8},\"ctr_pct\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-22.1,\"semanas_estaveis_consecutivas\":3,\"mediana_8sem\":10.18,\"semanas_com_base\":6,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-0.4}},\"meta\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-90.9,\"semanas_estaveis_consecutivas\":2,\"mediana_8sem\":1.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"vendas\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.5,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-15\",\"desvio_atual_vs_mediana_pct\":-100.0},\"cpl\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":6.3,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":265.84,\"semanas_com_base\":6,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":3.1},\"cac\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":60.6,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":480.83,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-69.7},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-88.6,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":76.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-55.3},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":0.0,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":0.66,\"semanas_com_base\":6,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0}}},\"interplus internet\":{\"total\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.0,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-15\",\"desvio_atual_vs_mediana_pct\":-100.0},\"vendas\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cpl\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":116.3,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":64.75,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":15.1},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":16.0,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-15\",\"desvio_atual_vs_mediana_pct\":-100.0},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":6.0,\"semanas_estaveis_consecutivas\":2,\"mediana_8sem\":1.32,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":2.3}},\"google\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.5,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-15\",\"desvio_atual_vs_mediana_pct\":-100.0},\"vendas\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cpl\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":112.9,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":70.95,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":60.7},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":7.0,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-15\",\"desvio_atual_vs_mediana_pct\":-100.0},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":9.9,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":8.91,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":25.6}},\"meta\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":9.0,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-15\",\"desvio_atual_vs_mediana_pct\":-100.0},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":1.3,\"semanas_estaveis_consecutivas\":4,\"mediana_8sem\":0.78,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":3.2}}},\"direct internet\":{\"total\":{\"leads\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":225.0,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":11.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":4.3},\"vendas\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":450.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":5.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":20.0},\"cpl\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-25.8,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":96.5,\"semanas_com_base\":7,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0},\"cac\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-21.2,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":222.5,\"semanas_com_base\":6,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-13.3},\"cliques\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-13.2,\"semanas_estaveis_consecutivas\":2,\"mediana_8sem\":314.5,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-29\",\"desvio_atual_vs_mediana_pct\":-1.7},\"ctr_pct\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":20.3,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":2.02,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":5.9}},\"google\":{\"leads\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":183.3,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":6.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-7.7},\"vendas\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":300.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":2.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":20.0},\"cpl\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-20.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":65.25,\"semanas_com_base\":6,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":35.1},\"cac\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":21.6,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":160.67,\"semanas_com_base\":6,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":9.8},\"cliques\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":16.6,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":195.0,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":19.5},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":13.6,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":9.54,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":3.1}},\"meta\":{\"leads\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":500.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":3.5,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-22\",\"desvio_atual_vs_mediana_pct\":71.4},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cpl\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-3.8,\"semanas_estaveis_consecutivas\":3,\"mediana_8sem\":103.0,\"semanas_com_base\":7,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-22\",\"desvio_atual_vs_mediana_pct\":1.8},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-51.1,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":79.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-4.4},\"ctr_pct\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-15.8,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.8,\"semanas_com_base\":8,\"formato\":\"gradual_queda\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-20.8}}},\"ativa-telecom\":{\"total\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null}},\"google\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null}},\"meta\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null}}},\"enove-fibra\":{\"total\":{\"leads\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-14.3,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":3.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":71.4},\"vendas\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.5,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-29\",\"desvio_atual_vs_mediana_pct\":100.0},\"cpl\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-37.1,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":245.5,\"semanas_com_base\":7,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-76.9},\"cac\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-48.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":382.33,\"semanas_com_base\":5,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-70.4},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-53.4,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":284.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-64.1},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-0.7,\"semanas_estaveis_consecutivas\":7,\"mediana_8sem\":0.75,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":2.7}},\"google\":{\"leads\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":400.0},\"vendas\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-100.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cpl\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-6.9,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":148.12,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-84.1},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-41.7,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":128.5,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-61.1},\"ctr_pct\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-16.5,\"semanas_estaveis_consecutivas\":3,\"mediana_8sem\":4.78,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-2.3}},\"meta\":{\"leads\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":50.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.5,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-33.3},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cpl\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-19.9,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":236.5,\"semanas_com_base\":6,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-6.1},\"cliques\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-59.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":153.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-66.0},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-14.9,\"semanas_estaveis_consecutivas\":6,\"mediana_8sem\":0.44,\"semanas_com_base\":8,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-2.3}}},\"ultranet-network\":{\"total\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":700.0},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cpl\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":-5.5,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":226.12,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-52.1},\"cliques\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":105.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":100.0},\"ctr_pct\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":60.9,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.11,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":31.5}},\"google\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":1.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":500.0},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cpl\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-43.9,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":101.34,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-21.9},\"cliques\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":37.0,\"semanas_com_base\":8,\"formato\":\"degrau\",\"semana_da_quebra\":\"2026-06-22\",\"desvio_atual_vs_mediana_pct\":235.1},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":5.7,\"semanas_estaveis_consecutivas\":4,\"mediana_8sem\":7.17,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":8.4}},\"meta\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":43.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":100.0},\"ctr_pct\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":29.1,\"semanas_estaveis_consecutivas\":3,\"mediana_8sem\":0.59,\"semanas_com_base\":4,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":12.6}}},\"unifique\":{\"total\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":68.8,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":101.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-100.0},\"ctr_pct\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":26.8,\"semanas_estaveis_consecutivas\":4,\"mediana_8sem\":1.6,\"semanas_com_base\":5,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":1.3}},\"google\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":91.2,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":59.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-100.0},\"ctr_pct\":{\"direcao_8sem\":\"queda\",\"variacao_pct_1a_vs_2a_metade\":-23.5,\"semanas_estaveis_consecutivas\":1,\"mediana_8sem\":5.93,\"semanas_com_base\":5,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":0.0}},\"meta\":{\"leads\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"vendas\":{\"direcao_8sem\":\"sem_base\",\"variacao_pct_1a_vs_2a_metade\":null,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.0,\"semanas_com_base\":8,\"formato\":\"sem_base\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":null},\"cliques\":{\"direcao_8sem\":\"alta\",\"variacao_pct_1a_vs_2a_metade\":31.0,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":38.0,\"semanas_com_base\":8,\"formato\":\"ruidoso\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":-100.0},\"ctr_pct\":{\"direcao_8sem\":\"estavel\",\"variacao_pct_1a_vs_2a_metade\":10.5,\"semanas_estaveis_consecutivas\":0,\"mediana_8sem\":0.63,\"semanas_com_base\":5,\"formato\":\"estavel\",\"semana_da_quebra\":null,\"desvio_atual_vs_mediana_pct\":25.4}}}},\"benchmark_pre_clique_30d\":{\"ativa-telecom\":{\"google\":{\"ctr_pct_30d\":5.76,\"cpc_estimado_30d\":4.31,\"ctr_media_outros_partners\":7.59,\"ctr_vs_pares_pct\":-24.2,\"cpc_media_outros_partners\":4.47,\"cpc_vs_pares_pct\":-3.5},\"meta\":{\"ctr_pct_30d\":0.75,\"cpc_estimado_30d\":6.3,\"ctr_media_outros_partners\":0.63,\"ctr_vs_pares_pct\":18.7,\"cpc_media_outros_partners\":6.7,\"cpc_vs_pares_pct\":-6.0}},\"direct internet\":{\"google\":{\"ctr_pct_30d\":10.09,\"cpc_estimado_30d\":2.92,\"ctr_media_outros_partners\":6.87,\"ctr_vs_pares_pct\":46.8,\"cpc_media_outros_partners\":4.7,\"cpc_vs_pares_pct\":-37.9},\"meta\":{\"ctr_pct_30d\":0.69,\"cpc_estimado_30d\":9.88,\"ctr_media_outros_partners\":0.64,\"ctr_vs_pares_pct\":7.5,\"cpc_media_outros_partners\":6.11,\"cpc_vs_pares_pct\":61.8}},\"enove-fibra\":{\"google\":{\"ctr_pct_30d\":4.47,\"cpc_estimado_30d\":4.08,\"ctr_media_outros_partners\":7.81,\"ctr_vs_pares_pct\":-42.8,\"cpc_media_outros_partners\":4.5,\"cpc_vs_pares_pct\":-9.4},\"meta\":{\"ctr_pct_30d\":0.42,\"cpc_estimado_30d\":4.58,\"ctr_media_outros_partners\":0.69,\"ctr_vs_pares_pct\":-38.8,\"cpc_media_outros_partners\":6.99,\"cpc_vs_pares_pct\":-34.5}},\"loga-internet\":{\"google\":{\"ctr_pct_30d\":9.05,\"cpc_estimado_30d\":6.7,\"ctr_media_outros_partners\":7.05,\"ctr_vs_pares_pct\":28.4,\"cpc_media_outros_partners\":4.07,\"cpc_vs_pares_pct\":64.7},\"meta\":{\"ctr_pct_30d\":0.86,\"cpc_estimado_30d\":3.92,\"ctr_media_outros_partners\":0.61,\"ctr_vs_pares_pct\":40.2,\"cpc_media_outros_partners\":7.1,\"cpc_vs_pares_pct\":-44.8}},\"the fiber internet\":{\"google\":{\"ctr_pct_30d\":9.81,\"cpc_estimado_30d\":5.1,\"ctr_media_outros_partners\":6.92,\"ctr_vs_pares_pct\":41.8,\"cpc_media_outros_partners\":4.33,\"cpc_vs_pares_pct\":17.6},\"meta\":{\"ctr_pct_30d\":0.59,\"cpc_estimado_30d\":8.68,\"ctr_media_outros_partners\":0.66,\"ctr_vs_pares_pct\":-10.4,\"cpc_media_outros_partners\":6.31,\"cpc_vs_pares_pct\":37.6}},\"ultranet-network\":{\"google\":{\"ctr_pct_30d\":7.03,\"cpc_estimado_30d\":4.53,\"ctr_media_outros_partners\":7.38,\"ctr_vs_pares_pct\":-4.8,\"cpc_media_outros_partners\":4.43,\"cpc_vs_pares_pct\":2.3},\"meta\":{\"ctr_pct_30d\":0.58,\"cpc_estimado_30d\":4.41,\"ctr_media_outros_partners\":0.66,\"ctr_vs_pares_pct\":-12.1,\"cpc_media_outros_partners\":7.02,\"cpc_vs_pares_pct\":-37.2}},\"unifique\":{\"google\":{\"ctr_pct_30d\":5.12,\"cpc_estimado_30d\":3.47,\"ctr_media_outros_partners\":7.7,\"ctr_vs_pares_pct\":-33.5,\"cpc_media_outros_partners\":4.61,\"cpc_vs_pares_pct\":-24.7},\"meta\":{\"ctr_pct_30d\":0.65,\"cpc_estimado_30d\":8.75,\"ctr_media_outros_partners\":0.65,\"ctr_vs_pares_pct\":0.3,\"cpc_media_outros_partners\":6.29,\"cpc_vs_pares_pct\":39.0}}},\"gargalo_funil_30d\":{\"ativa-telecom\":{\"google\":{\"etapa\":\"redirect>leads\",\"taxa_30d_pct\":6.5,\"taxa_media_pares_pct\":38.0,\"desvio_vs_pares_pct\":-82.9,\"taxa_30d_prev_pct\":null,\"delta_vs_historico_pct\":null},\"meta\":{\"etapa\":\"redirect>leads\",\"taxa_30d_pct\":1.4,\"taxa_media_pares_pct\":31.8,\"desvio_vs_pares_pct\":-95.6,\"taxa_30d_prev_pct\":null,\"delta_vs_historico_pct\":null}},\"direct internet\":{\"google\":{\"etapa\":\"sessoes>clickoff\",\"taxa_30d_pct\":21.6,\"taxa_media_pares_pct\":38.3,\"desvio_vs_pares_pct\":-43.6,\"taxa_30d_prev_pct\":19.4,\"delta_vs_historico_pct\":11.3},\"meta\":{\"etapa\":\"cliques>chat_start\",\"taxa_30d_pct\":38.3,\"taxa_media_pares_pct\":27.1,\"desvio_vs_pares_pct\":41.2,\"taxa_30d_prev_pct\":44.6,\"delta_vs_historico_pct\":-14.1}},\"enove-fibra\":{\"google\":{\"etapa\":\"redirect>leads\",\"taxa_30d_pct\":15.2,\"taxa_media_pares_pct\":36.6,\"desvio_vs_pares_pct\":-58.4,\"taxa_30d_prev_pct\":13.6,\"delta_vs_historico_pct\":11.8},\"meta\":{\"etapa\":\"cliques>chat_start\",\"taxa_30d_pct\":14.8,\"taxa_media_pares_pct\":31.0,\"desvio_vs_pares_pct\":-52.3,\"taxa_30d_prev_pct\":19.2,\"delta_vs_historico_pct\":-22.9}},\"loga-internet\":{\"google\":{\"etapa\":\"clickoff>redirect\",\"taxa_30d_pct\":49.6,\"taxa_media_pares_pct\":31.9,\"desvio_vs_pares_pct\":55.3,\"taxa_30d_prev_pct\":57.0,\"delta_vs_historico_pct\":-13.0},\"meta\":{\"etapa\":\"zip_search>redirect\",\"taxa_30d_pct\":41.0,\"taxa_media_pares_pct\":61.6,\"desvio_vs_pares_pct\":-33.4,\"taxa_30d_prev_pct\":45.6,\"delta_vs_historico_pct\":-10.1}},\"the fiber internet\":{\"google\":{\"etapa\":\"redirect>leads\",\"taxa_30d_pct\":31.7,\"taxa_media_pares_pct\":33.8,\"desvio_vs_pares_pct\":-6.3,\"taxa_30d_prev_pct\":49.3,\"delta_vs_historico_pct\":-35.7},\"meta\":{\"etapa\":\"redirect>leads\",\"taxa_30d_pct\":20.0,\"taxa_media_pares_pct\":28.8,\"desvio_vs_pares_pct\":-30.4,\"taxa_30d_prev_pct\":18.6,\"delta_vs_historico_pct\":7.5}},\"ultranet-network\":{\"google\":{\"etapa\":\"clickoff>redirect\",\"taxa_30d_pct\":23.6,\"taxa_media_pares_pct\":36.3,\"desvio_vs_pares_pct\":-34.9,\"taxa_30d_prev_pct\":null,\"delta_vs_historico_pct\":null},\"meta\":{\"etapa\":\"zip_search>redirect\",\"taxa_30d_pct\":36.0,\"taxa_media_pares_pct\":62.4,\"desvio_vs_pares_pct\":-42.3,\"taxa_30d_prev_pct\":null,\"delta_vs_historico_pct\":null}},\"interplus internet\":{\"google\":{\"etapa\":\"sessoes>clickoff\",\"taxa_30d_pct\":0.0,\"taxa_media_pares_pct\":41.4,\"desvio_vs_pares_pct\":-100.0,\"taxa_30d_prev_pct\":57.9,\"delta_vs_historico_pct\":-100.0},\"meta\":{\"etapa\":\"chat_start>zip_search\",\"taxa_30d_pct\":0.0,\"taxa_media_pares_pct\":71.9,\"desvio_vs_pares_pct\":-100.0,\"taxa_30d_prev_pct\":73.5,\"delta_vs_historico_pct\":-100.0}},\"unifique\":{\"google\":{\"etapa\":\"redirect>leads\",\"taxa_30d_pct\":8.3,\"taxa_media_pares_pct\":37.7,\"desvio_vs_pares_pct\":-78.0,\"taxa_30d_prev_pct\":18.5,\"delta_vs_historico_pct\":-55.1},\"meta\":{\"etapa\":\"redirect>leads\",\"taxa_30d_pct\":0.0,\"taxa_media_pares_pct\":32.1,\"desvio_vs_pares_pct\":-100.0,\"taxa_30d_prev_pct\":21.3,\"delta_vs_historico_pct\":-100.0}}}}";  // dump real do cache (cutoff 2026-07-15) — tools/dump_payload.py
+
+// ═══════════════════════════════════════════════════════════════════════
+// PROMPTS
+// ═══════════════════════════════════════════════════════════════════════
+
+const DEFAULT_E1 = String.raw`Você é especialista sênior de mídia paga e cuida das contas do MP Agência (Melhor
+Plano) — provedores regionais de internet que compram um pacote mensal de mídia
+100% investido em campanhas.
+
+Sua tarefa nesta etapa é DIAGNOSTICAR, não escrever. A redação do relatório
+acontece em outra etapa. Aqui você produz julgamento estruturado: o que explica o
+número, qual a causa provável, como validar, o que fazer.
+
+<negocio>
+Dois canais por partner:
+- google — pesquisa no Google Ads.
+  Funil: impressoes > cliques > sessoes > clickoff > redirect > leads > vendas
+- meta — click-to-WhatsApp com bot.
+  Funil: impressoes > cliques > chat_start > zip_search > redirect > leads > vendas
+
+Cashback: quando o lead gerado pela campanha de um partner fecha com OUTRO
+provedor (CEP fora da cobertura do anunciante), o anunciante recebe cashback de
+reinvestimento.
+- investimento_liquido = bruto - cashback. CPL e CAC já vêm sobre o líquido.
+- Cashback subindo NÃO é dinheiro de volta: é a campanha comprando demanda fora
+  da área atendida. É sinal de segmentação geográfica desalinhada.
+- Atribuição de lead e venda é SEMPRE ao partner anunciante, nunca ao provedor
+  que recebeu o lead.
+
+Cada partner é uma conta isolada. A verba de um partner só pode ser realocada
+entre os canais e campanhas DELE. Nunca recomende mover verba entre partners.
+</negocio>
+
+<metas>
+- CAC: até R$150 é o ideal · R$150-200 é zona de alerta · acima de R$200 é alarme
+- CPL: até R$100 é a meta · acima disso é alerta
+
+Metas absolutas, iguais para todos os partners. Tamanho da conta não altera
+prioridade.
+</metas>
+
+<escada_de_julgamento>
+Julgue cada partner descendo esta escada e pare no primeiro degrau que o dado
+sustenta:
+
+1. CAC (30d) — indicador principal.
+2. CPL (30d) — use quando o CAC não tem base.
+3. Etapas do funil + CPC — sempre, para EXPLICAR o CAC ou o CPL do degrau acima.
+
+O degrau 3 nunca substitui os degraus 1 e 2 como veredito: ele é a explicação de
+por que o número de cima está onde está. Parecer que fica só no degrau 3, sem
+amarrar em CAC ou CPL, está incompleto.
+
+Toda avaliação de CAC e CPL usa 30d, nunca 7d: venda tem lag de fechamento e o
+CAC de 7d vem sistematicamente inflado. Use 7d apenas para topo e meio de funil
+(impressões, cliques, sessões/conversas, redirects, leads).
+</escada_de_julgamento>
+
+<como_diagnosticar>
+Ordem de investigação, por partner:
+
+1. Leia "status" e "motivo" em triagem. Os limiares já foram aplicados em código
+   — não recalcule nem discuta o status.
+
+2. Se "gargalo_relevante" for true, comece por gargalo_funil_30d: é a etapa mais
+   fraca do meio de funil e a de ação mais rápida. Se for false, o funil está
+   dentro do normal e o problema está em outro lugar — não invente gargalo.
+
+3. Leia o formato da série semanal antes de concluir. Formato é diagnóstico:
+   - degrau -> algo mudou numa data específica: campanha pausada, verba cortada,
+     segmentação alterada, rastreamento quebrado. A ação é descobrir o que mudou
+     na semana indicada.
+   - gradual_queda -> desgaste contínuo: fadiga de criativo ou leilão encarecendo.
+   - estavel -> o número atual não é notícia desta semana, é o patamar da conta.
+   - ruidoso -> volume baixo demais para ler tendência.
+
+4. Pré-clique (ctr_pct, cpc_estimado vs pares) quando o gargalo não for de meio
+   de funil. Desvio de 30% ou mais vs pares precisa aparecer no diagnóstico.
+
+5. Cashback quando pct_cashback subiu vs a janela anterior. Antes de recomendar
+   aperto geográfico, verifique se zip_search>redirect (meta) ou
+   clickoff>redirect (google) também piorou. Se o cashback subiu e essas taxas
+   estão estáveis, a causa provável é mudança no mix de demanda, não segmentação
+   — apertar o raio corta volume sem ganho.
+
+6. Taxa redirect>leads fraca ou taxa lead>venda fraca tem DUAS causas possíveis,
+   e você precisa escolher com evidência:
+   - captação desqualificada (é alavanca de mídia): volume alto + CPL abaixo da
+     meta + cashback subindo -> segmentação aberta demais puxando tráfego que não
+     fecha.
+   - funil comercial do provedor (fora da mídia): volume normal + CPL na meta +
+     cobertura ok -> atendimento ou agenda de instalação do provedor.
+   Não atribua ao provedor por default.
+
+Padrões de leitura pré-clique:
+- impressões caindo + CTR estável = perda de entrega (orçamento/lance/leilão)
+- CTR caindo + impressões estáveis = fadiga de criativo ou concorrente novo
+- impressões subindo + CTR caindo sem ganho de cliques = segmentação aberta demais
+- CPC subindo + CTR estável = leilão mais caro
+
+Padrões por etapa:
+- google: cliques ok + sessões baixas = landing ou rastreamento ·
+  sessoes>clickoff fraca = oferta pouco competitiva · clickoff>redirect fraca =
+  cobertura/viabilidade · redirect>leads fraca = fricção de formulário
+- meta: cliques>chat_start fraca = criativo/CTA ou fricção do click-to-WhatsApp ·
+  chat_start>zip_search fraca = abandono no início do bot · zip_search>redirect
+  fraca = CEPs fora da cobertura · redirect>leads fraca = fricção final do fluxo
+</como_diagnosticar>
+
+<regras_de_evidencia>
+- Todo número que você citar em qualquer campo tem que estar também em
+  evidencias_citadas, com metrica, valor e janela exatamente como aparecem no
+  payload. Número fora dessa lista é rejeitado na validação automática.
+- Não calcule nada. Taxas, variações, CTR, CPC e tendências já vêm prontas. Se um
+  número que você quer citar não existe no payload, ele não existe — reformule o
+  diagnóstico no nível que os dados permitem.
+- Não cite nome de campanha, criativo, adset ou posição média: não estão no
+  payload.
+- Não atribua variação a sazonalidade, feriado ou ciclo de faturamento.
+  Sazonalidade não está mapeada neste negócio; essa atribuição é sempre
+  especulação e fecha a investigação antes da hora.
+- confianca "baixa" é resposta válida e melhor que hipótese inventada. Mas se a
+  confiança é baixa, a ação da semana é de observação ou coleta de dado, não
+  mexida em campanha.
+- Quando 7d e 30d apontarem em direções opostas na MESMA métrica, com base
+  suficiente nas duas janelas, o resultado não fechou direção: diga isso e
+  proponha acompanhar. Divergência entre métricas diferentes não autoriza essa
+  saída.
+- status "dado_suspeito" -> não diagnostique performance. A ação é verificar
+  rastreamento.
+- status "ramp" -> diga só que a conta está em ramp e o que observar quando
+  fechar 14 dias de dados.
+- risco_churn true na triagem -> o diagnóstico tem que endereçar isso
+  explicitamente, não apenas repetir o CAC.
+- Limites de tamanho: diagnostico até 400 caracteres, cadeia_causal até 300,
+  hipotese até 250, como_validar até 200, acao_semana até 250.
+</regras_de_evidencia>
+
+<comparacao_com_semana_anterior>
+Você recebe diagnostico_semana_anterior. Para cada partner que aparecer lá,
+preencha mudou_vs_semana_anterior com uma destas leituras:
+- a ação recomendada foi executada e o indicador respondeu
+- a ação foi executada e o indicador NÃO respondeu — nesse caso a hipótese
+  anterior provavelmente estava errada e você precisa de uma nova
+- a ação não parece ter sido executada (indicador e padrão seguem idênticos)
+- o diagnóstico mudou de eixo (o problema anterior saiu, apareceu outro)
+
+Partner ausente na semana anterior, ou lista vazia -> deixe o campo fora. Não
+invente continuidade.
+</comparacao_com_semana_anterior>
+
+<acoes_priorizadas>
+Além dos diagnósticos, produza a lista de ações da semana ordenada por impacto.
+Sem número mínimo nem máximo: quantas o dado sustentar.
+
+Impacto = gravidade (distância da meta, conforme o status da triagem) x confiança
+no diagnóstico. Ordene por gravidade primeiro; em caso de empate, confiança alta
+antes de média.
+
+Não inclua ação com confiança baixa nesta lista — ela vive no parecer do partner
+como observação, não como ação priorizada.
+Nunca proponha mover verba entre partners.
+</acoes_priorizadas>
+
+DADOS — data de corte {cover}:
+{payload}
+
+DIAGNÓSTICO DA SEMANA ANTERIOR:
+{diagnostico_anterior}
+
+Responda apenas com o JSON do schema. Sem markdown em volta, sem comentários.`;
+
+
+const DEFAULT_E2 = String.raw`Você é especialista sênior de mídia paga do MP Agência e está escrevendo o
+relatório semanal das contas. Os diagnósticos já estão fechados — seu trabalho
+aqui é redigir, não reanalisar.
+
+<leitores>
+Três públicos no mesmo documento:
+- Time de mídia — executa as ações. Precisa da alavanca específica: qual canal,
+  qual etapa, o que mexer.
+- PM do projeto — precisa da leitura de conjunto e do que mudou desde a semana
+  passada.
+- CEO — lê o topo e para. Precisa saber onde está o dinheiro em risco e qual é a
+  decisão da semana, sem vocabulário de operação.
+
+Voz de especialista de mídia falando sobre contas que acompanha toda semana:
+direto, opinativo, específico. Não é consultoria externa avaliando de fora, nem
+laudo formal. O topo do relatório precisa funcionar para o CEO; o detalhe é do
+time de mídia.
+</leitores>
+
+<materia_prima>
+Você recebe o JSON de diagnóstico desta semana e o da semana anterior. Não recebe
+os dados brutos — de propósito. Os leitores já têm um dashboard interativo com
+todos os números, funis e comparações. Relatório que repete o dashboard tem valor
+zero; seu valor é o raciocínio.
+</materia_prima>
+
+<regra_dos_numeros>
+Você só pode citar números que aparecem em evidencias_citadas do partner
+correspondente. Nada além disso — não estime, não arredonde para um valor que não
+está lá, não some, não calcule variação.
+
+Critério de uso, não de quantidade: todo número citado tem que estar na mesma
+frase que a conclusão que ele sustenta. Número solto, sem inferência amarrada, é
+recitação de dashboard — corte.
+
+Quando o volume for baixo, prefira absolutos a percentuais: "de 20 leads, só 3
+viraram venda" comunica o tamanho real do problema melhor que "taxa de 15%".
+
+Valores em R$ sem centavos.
+</regra_dos_numeros>
+
+<ordem_de_escrita>
+Escreva nesta ordem, porque cada bloco depende do anterior:
+1. pareceres por partner
+2. recomendações
+3. leitura de portfólio (derivada dos pareceres que você acabou de escrever)
+4. resumo Slack (derivado da leitura de portfólio)
+
+Não escreva o resumo antes dos pareceres.
+</ordem_de_escrita>
+
+<pareceres>
+Um parecer por partner, na ordem de prioridade que vier no JSON. Nunca omita um
+partner.
+
+3 a 5 frases. Todo parecer cobre: situação, o que explica, e o que fazer esta
+semana. Hipótese e forma de validar entram quando existirem no diagnóstico.
+
+Os campos cobertos são fixos — a ênfase e a ordem são livres. Abra pela parte
+mais forte da história daquela conta, não por um template. Uma conta com degrau na
+série abre pelo degrau; uma conta com gargalo de bot abre pelo bot; uma conta
+saudável e subaproveitada abre pela oportunidade.
+
+Quando mudou_vs_semana_anterior estiver preenchido, isso entra no parecer —
+inclusive quando a leitura é que a ação anterior não foi executada, ou foi e não
+funcionou. Essa é a parte do relatório que nenhum dashboard faz.
+
+Partner em ramp, sem_base ou dado_suspeito: uma frase dizendo o que é e o que
+verificar. Não force análise.
+</pareceres>
+
+<leitura_portfolio>
+Um parágrafo curto. Onde o MP Agência ganha e perde dinheiro hoje, qual conta
+exige ação urgente e por quê, e a decisão mais importante da semana.
+
+Escrito para o CEO: sem jargão de etapa de funil, sem nome de métrica de
+plataforma. Se houver padrão de portfólio — várias contas com o mesmo problema ao
+mesmo tempo — a manchete é o padrão, não a conta individual.
+
+Verba nunca se move entre partners. Cada conta é isolada e os resultados são dela.
+</leitura_portfolio>
+
+<nao_faca>
+- Não escreva frase que não contenha diagnóstico, hipótese, risco, oportunidade
+  ou decisão. Teste: se a frase não muda nenhuma decisão do leitor, corte.
+- Não subdivida o parecer em "Google:" / "Meta:" com lista de métricas. Canal
+  entra na narrativa quando for relevante para o diagnóstico.
+- Não use preâmbulo ("vale destacar que", "é importante notar", "conforme os
+  dados") nem adjetivo que não carrega informação.
+- Não repita entre seções. O resumo Slack não é a leitura de portfólio
+  abreviada, é a conclusão dela.
+- Não hedge quando o diagnóstico tem confiança alta. Posicione-se: faça X porque
+  Y. Quando o diagnóstico disser que o resultado não fechou direção, dizer
+  "vamos acompanhar mais uma semana" é a posição correta, não uma fuga.
+- Não comente crédito, saldo ou runway do pacote — há alertas dedicados a isso.
+- Não mencione responsáveis, pessoas ou times na ação. Descreva o problema, a
+  hipótese e o que fazer.
+- Não invente número, data ou nome de campanha.
+</nao_faca>
+
+<formato>
+Responda com os quatro blocos abaixo, nesta ordem, sem markdown em volta e sem
+texto fora das tags:
+
+<pareceres>
+HTML. Um h3 com o nome do partner por parecer, seguido de p.
+Tags permitidas: h3, p, strong, ul, li.
+</pareceres>
+
+<recomendacoes>
+HTML. Uma table com thead/tbody e as colunas: Prioridade, Partner, Canal, Ação,
+Justificativa, Impacto esperado, Confiança.
+Uma linha por item de acoes_priorizadas, na ordem do JSON.
+Esta tabela é o recorte executável dos pareceres — repetição aqui é intencional.
+Não introduza ação que não esteja no JSON.
+</recomendacoes>
+
+<leitura_portfolio>
+HTML. Um único p.
+</leitura_portfolio>
+
+<resumo_slack>
+Texto puro em mrkdwn do Slack (*negrito*, bullets com •). Até 700 caracteres.
+1 bullet com a leitura da semana — a conclusão, não os números.
+2 a 3 bullets com os diagnósticos mais importantes.
+1 bullet com a ação nº 1.
+</resumo_slack>
+</formato>
+
+DIAGNÓSTICO DESTA SEMANA (corte {cover}):
+{diagnostico_json}
+
+DIAGNÓSTICO DA SEMANA ANTERIOR:
+{diagnostico_anterior}`;
+
+
+// Schema do estágio 1. Sem maxLength de propósito: nem toda versão da API do
+// Gemini aceita, e um 400 aqui derruba o teste. Os limites vão no prompt e a
+// validação em JS avisa quando estouram.
+const STAGE1_SCHEMA = {
+  type: "object",
+  required: ["partners", "acoes_priorizadas"],
+  properties: {
+    partners: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["partner","status_geral","eixo_principal","canal_critico","diagnostico",
+                   "cadeia_causal","acao_semana","confianca","evidencias_citadas","risco_churn"],
+        properties: {
+          partner:        { type:"string" },
+          status_geral:   { type:"string", enum:["ok","atencao","alarme","sem_base","dado_suspeito","ramp"] },
+          eixo_principal: { type:"string", enum:["cac","cpl","funil","pre_clique","cobertura","rastreamento","ramp","saudavel"] },
+          canal_critico:  { type:"string", enum:["google","meta","ambos","nenhum"] },
+          diagnostico:    { type:"string", description:"até 400 caracteres" },
+          cadeia_causal:  { type:"string", description:"a escada CAC->CPL->etapa->pré-clique, até 300 caracteres" },
+          hipotese:       { type:"string", description:"até 250 caracteres" },
+          como_validar:   { type:"string", description:"até 200 caracteres" },
+          acao_semana:    { type:"string", description:"até 250 caracteres" },
+          confianca:      { type:"string", enum:["alta","media","baixa"] },
+          risco_churn:    { type:"boolean" },
+          mudou_vs_semana_anterior: { type:"string", description:"até 200 caracteres; omitir se não houver semana anterior" },
+          evidencias_citadas: {
+            type:"array",
+            items: {
+              type:"object",
+              required:["metrica","valor","janela"],
+              properties: {
+                metrica:{type:"string"}, valor:{type:"string"},
+                janela:{type:"string"}, canal:{type:"string", enum:["google","meta","ambos"]}
+              }
+            }
+          }
+        }
+      }
+    },
+    acoes_priorizadas: {
+      type:"array",
+      items: {
+        type:"object",
+        required:["ordem","partner","canal","acao","justificativa","impacto_esperado","confianca"],
+        properties: {
+          ordem:{type:"integer"}, partner:{type:"string"},
+          canal:{type:"string", enum:["google","meta","ambos"]},
+          acao:{type:"string"}, justificativa:{type:"string"},
+          impacto_esperado:{type:"string"}, confianca:{type:"string", enum:["alta","media"]}
+        }
+      }
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// ESTÁGIO 0 — TRIAGEM
+// Espelho de ai_analysis.triar() (scripts/ai_analysis.py). O Python é a fonte
+// da verdade desde 2026-07-24 — mudou lá, muda aqui.
+// ═══════════════════════════════════════════════════════════════════════
+
+const META = { CAC_IDEAL:150, CAC_ALARME:200, CPL_META:100, CPL_ALARME:200,
+               MIN_VENDAS:3, MIN_LEADS:10, RAMP_DIAS:14 };
+
+const SEV = { alarme:0, atencao:1, dado_suspeito:2, sem_base:3, ramp:4, ok:5 };
+
+function gargaloRelevante(g) {
+  if (!g) return false;
+  return [g.desvio_vs_pares_pct, g.delta_vs_historico_pct]
+    .some(d => d !== null && d !== undefined && d <= -15);
+}
+
+function escada(liq, leads, vendas, cac, cpl, leads7, dias) {
+  const r = (s,m,b) => ({ status:s, motivo:m, base:b });
+  if (!liq && !leads) return r("sem_base", "sem investimento nem lead em 30d", "nenhuma");
+  if (dias < META.RAMP_DIAS) return r("ramp", `conta com ${dias} dias de dados (ramp de ${META.RAMP_DIAS})`, "ramp");
+  if (liq > 0 && !leads && !leads7) return r("dado_suspeito", "investimento em 30d sem nenhum lead em 7d e 30d", "nenhuma");
+  if (vendas >= META.MIN_VENDAS && cac != null) {
+    if (cac <= META.CAC_IDEAL)  return r("ok",      `CAC 30d R$${Math.round(cac)} dentro do ideal`, "cac");
+    if (cac <= META.CAC_ALARME) return r("atencao", `CAC 30d R$${Math.round(cac)} na zona de alerta (150-200)`, "cac");
+    return r("alarme", `CAC 30d R$${Math.round(cac)} acima do teto de R$200`, "cac");
+  }
+  if (leads >= META.MIN_LEADS && cpl != null) {
+    const suf = ` (só ${vendas} venda(s) em 30d, CAC sem base)`;
+    if (cpl <= META.CPL_META)   return r("ok",      `CPL 30d R$${Math.round(cpl)} na meta${suf}`, "cpl");
+    if (cpl <= META.CPL_ALARME) return r("atencao", `CPL 30d R$${Math.round(cpl)} acima da meta de R$100${suf}`, "cpl");
+    return r("alarme", `CPL 30d R$${Math.round(cpl)} acima do dobro da meta${suf}`, "cpl");
+  }
+  return r("sem_base", `${leads} lead(s) e ${vendas} venda(s) em 30d — abaixo da base mínima`, "nenhuma");
+}
+
+function distanciaMetaPct(base, cac, cpl) {
+  if (base === "cac" && cac != null) return Math.round(100 * (cac - META.CAC_ALARME) / META.CAC_ALARME);
+  if (base === "cpl" && cpl != null) return Math.round(100 * (cpl - META.CPL_META) / META.CPL_META);
+  return null;
+}
+
+function triar(payload) {
+  const kpis = payload.kpis_por_partner_canal_janela || {};
+  const tend = payload.tendencia_semanal_por_partner || {};
+  const garg = payload.gargalo_funil_30d || {};
+  const diasMap = payload.dias_de_dados_por_partner || {};
+  const partners = payload.partners || Object.keys(kpis);
+  const out = {};
+
+  for (const p of partners) {
+    const dias = diasMap[p] || 0;
+    const niveis = {};
+    for (const nivel of ["conta","google","meta"]) {
+      const w = (kpis[p] || {})[nivel] || {};
+      const j30 = w["30d"] || {}, j30p = w["30d_prev"] || {}, j7 = w["7d"] || {};
+      const liq = j30.investimento_liquido || 0;
+      const leads = j30.leads || 0, vendas = j30.vendas || 0;
+      const cac = j30.cac ?? null, cpl = j30.cpl ?? null;
+      const e = escada(liq, leads, vendas, cac, cpl, j7.leads || 0, dias);
+      niveis[nivel] = {
+        status: e.status, motivo: e.motivo, base_de_julgamento: e.base,
+        cac_30d: cac, cpl_30d: cpl,
+        cac_30d_prev: j30p.cac ?? null, cpl_30d_prev: j30p.cpl ?? null,
+        leads_30d: leads, vendas_30d: vendas,
+        investimento_liquido_30d: Math.round(liq),
+        distancia_meta_pct: distanciaMetaPct(e.base, cac, cpl),
+        pct_cashback_30d: j30.pct_cashback ?? null,
+        pct_cashback_30d_prev: j30p.pct_cashback ?? null,
+        cashback_subiu: (j30.pct_cashback != null && j30p.pct_cashback != null)
+                        ? j30.pct_cashback > j30p.pct_cashback : null,
+        // gargalo só conta onde há base: conta sem lead marca -100% em toda etapa
+        gargalo_relevante: (e.base !== "nenhuma" && e.base !== "ramp")
+                           ? gargaloRelevante((garg[p] || {})[nivel]) : false,
+      };
+    }
+
+    const conta = niveis.conta;
+    delete niveis.conta;
+    const piores = Object.entries(niveis).sort((a,b) =>
+      (SEV[a[1].status] - SEV[b[1].status]) || ((b[1].distancia_meta_pct||0) - (a[1].distancia_meta_pct||0)));
+    const canalCritico = SEV[piores[0][1].status] <= SEV.atencao ? piores[0][0] : "nenhum";
+
+    const dirLeads = ((((tend[p] || {}).total) || {}).leads || {}).direcao_8sem || null;
+    const riscoChurn = !!(conta.cac_30d && conta.cac_30d_prev &&
+                          conta.cac_30d > META.CAC_ALARME && conta.cac_30d_prev > META.CAC_ALARME &&
+                          (dirLeads === "queda" || dirLeads === "estavel"));
+
+    out[p] = {
+      status_geral: conta.status, motivo: conta.motivo,
+      base_de_julgamento: conta.base_de_julgamento,
+      distancia_meta_pct: conta.distancia_meta_pct,
+      dias_de_dados: dias, conta, canal_critico: canalCritico, canais: niveis,
+      tendencia_leads_8sem: dirLeads, risco_churn: riscoChurn,
+      motivo_risco_churn: riscoChurn
+        ? "CAC acima de R$200 em 30d e em 30d_prev, com leads em queda ou estáveis no piso" : null,
+    };
+  }
+
+  const ordem = Object.keys(out).sort((a,b) =>
+    (SEV[out[a].status_geral] - SEV[out[b].status_geral]) ||
+    ((out[b].distancia_meta_pct||0) - (out[a].distancia_meta_pct||0)));
+
+  return { metas: META, ordem_de_prioridade: ordem, por_partner: out };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// VALIDAÇÃO
+// ═══════════════════════════════════════════════════════════════════════
+
+function extrairNumeros(txt) {
+  const limpo = txt.replace(/<[^>]+>/g, " ");
+  const found = new Set();
+  const re = /(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:[.,]\d+)?)\s*%?/g;
+  let m;
+  while ((m = re.exec(limpo))) {
+    const n = m[1].replace(/\./g, "").replace(",", ".");
+    const v = parseFloat(n);
+    if (!isNaN(v) && v >= 2) found.add(v);   // ignora 0 e 1 (contagem em prosa)
+  }
+  return found;
+}
+
+function numerosPermitidos(diag) {
+  const ok = new Set();
+  for (const p of diag.partners || []) {
+    for (const e of p.evidencias_citadas || []) {
+      const re = /(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:[.,]\d+)?)/g;
+      let m;
+      while ((m = re.exec(String(e.valor)))) {
+        const v = parseFloat(m[1].replace(/\./g,"").replace(",","."));
+        if (!isNaN(v)) { ok.add(v); ok.add(Math.round(v)); }
+      }
+    }
+  }
+  return ok;
+}
+
+function validar(payload, triagem, diag, blocos) {
+  const r = [];
+  const add = (lvl, msg) => r.push({ lvl, msg });
+  const partnersPayload = payload.partners || Object.keys(payload.kpis_por_partner_canal_janela || {});
+
+  // estágio 1
+  add("h", "Estágio 1 — diagnóstico");
+  if (!diag) { add("fail", "sem JSON de diagnóstico"); return r; }
+  const nomes = (diag.partners || []).map(p => p.partner);
+  const faltando = partnersPayload.filter(p => !nomes.some(n => n.toLowerCase().includes(p.toLowerCase()) || p.toLowerCase().includes(n.toLowerCase())));
+  faltando.length ? add("fail", `partner ausente no diagnóstico: ${faltando.join(", ")}`)
+                  : add("pass", `todos os ${partnersPayload.length} partners presentes`);
+
+  let divergentes = [];
+  for (const p of diag.partners || []) {
+    const t = triagem.por_partner[p.partner] ||
+              Object.entries(triagem.por_partner).find(([k]) => k.toLowerCase() === p.partner.toLowerCase())?.[1];
+    if (t && t.status_geral !== p.status_geral) divergentes.push(`${p.partner}: disse "${p.status_geral}", triagem diz "${t.status_geral}"`);
+  }
+  divergentes.length ? add("fail", "status reclassificado pelo modelo — " + divergentes.join(" · "))
+                     : add("pass", "status_geral bate com a triagem em todos os partners");
+
+  const semEvid = (diag.partners||[]).filter(p => !(p.evidencias_citadas||[]).length).map(p=>p.partner);
+  semEvid.length ? add("warn", "sem evidencias_citadas: " + semEvid.join(", "))
+                 : add("pass", "todo partner declarou evidências");
+
+  const acoesBaixa = (diag.acoes_priorizadas||[]).filter(a => a.confianca === "baixa");
+  acoesBaixa.length ? add("fail", `${acoesBaixa.length} ação priorizada com confiança baixa`)
+                    : add("pass", "nenhuma ação priorizada com confiança baixa");
+
+  const churnTri = Object.entries(triagem.por_partner).filter(([,v]) => v.risco_churn).map(([k])=>k);
+  const churnDiag = (diag.partners||[]).filter(p=>p.risco_churn).map(p=>p.partner);
+  if (churnTri.length) {
+    const perdidos = churnTri.filter(p => !churnDiag.some(d => d.toLowerCase().includes(p.toLowerCase())));
+    perdidos.length ? add("fail", "risco de churn na triagem não marcado no diagnóstico: " + perdidos.join(", "))
+                    : add("pass", "risco de churn propagado: " + churnTri.join(", "));
+  } else add("pass", "nenhum risco de churn na triagem");
+
+  const limites = { diagnostico:400, cadeia_causal:300, hipotese:250, como_validar:200, acao_semana:250 };
+  const estouros = [];
+  for (const p of diag.partners||[]) for (const [k,lim] of Object.entries(limites))
+    if (p[k] && p[k].length > lim) estouros.push(`${p.partner}.${k} ${p[k].length}/${lim}`);
+  estouros.length ? add("warn", "campo acima do limite: " + estouros.join(" · "))
+                  : add("pass", "todos os campos dentro dos limites de tamanho");
+
+  // estágio 2
+  if (!blocos) return r;
+  add("h", "Estágio 2 — redação");
+  for (const b of ["pareceres","recomendacoes","leitura_portfolio","resumo_slack"])
+    blocos[b] ? add("pass", `bloco <${b}> presente`) : add("fail", `bloco <${b}> ausente ou não fechou`);
+
+  const h3 = (blocos.pareceres||"").match(/<h3/gi) || [];
+  h3.length === nomes.length ? add("pass", `${h3.length} pareceres para ${nomes.length} partners`)
+                             : add("fail", `${h3.length} pareceres para ${nomes.length} partners`);
+
+  const sl = (blocos.resumo_slack||"").length;
+  sl <= 700 ? add("pass", `resumo Slack com ${sl} caracteres`) : add("fail", `resumo Slack com ${sl} caracteres (limite 700)`);
+
+  const tagsOk = /^(?:(?!<\s*\/?\s*(?!h3|p|strong|ul|li|table|thead|tbody|tr|th|td)\w+)[\s\S])*$/;
+  const prosa = (blocos.pareceres||"") + (blocos.leitura_portfolio||"");
+  const tagsUsadas = [...prosa.matchAll(/<\s*\/?\s*([a-zA-Z0-9]+)/g)].map(m=>m[1].toLowerCase());
+  const proibidas = [...new Set(tagsUsadas.filter(t => !["h3","p","strong","ul","li","table","thead","tbody","tr","th","td"].includes(t)))];
+  proibidas.length ? add("fail", "tag fora da whitelist: " + proibidas.join(", ")) : add("pass", "só tags permitidas");
+
+  const permitidos = numerosPermitidos(diag);
+  const usados = extrairNumeros((blocos.pareceres||"") + " " + (blocos.leitura_portfolio||"") + " " + (blocos.resumo_slack||""));
+  const suspeitos = [...usados].filter(v => !permitidos.has(v) && !permitidos.has(Math.round(v)));
+  suspeitos.length ? add("warn", `número na prosa fora de evidencias_citadas: ${suspeitos.slice(0,15).join(", ")}${suspeitos.length>15?"…":""}`)
+                   : add("pass", "todo número da prosa existe em evidencias_citadas");
+  return r;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// UI + CHAMADAS
+// ═══════════════════════════════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+const e1El=$("promptE1"), e2El=$("promptE2"), payEl=$("payloadText"), prevEl=$("prevText"), statusEl=$("status");
+
+function tabs(container) {
+  document.querySelectorAll(`#${container} button`).forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(`#${container} button`).forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    const col = b.closest(".col");
+    col.querySelectorAll(".pane").forEach(p => p.classList.remove("active"));
+    $(b.dataset.pane).classList.add("active");
+  }));
+}
+tabs("inTabs"); tabs("outTabs");
+
+function show(pane) {
+  const btn = document.querySelector(`#outTabs button[data-pane="${pane}"]`);
+  if (btn) btn.click();
+}
+function setPane(id, html) { $(id).innerHTML = html; }
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+function step(id, cls) { const el=$(id); el.className = cls || ""; }
+
+function loadInitial() {
+  e1El.value  = localStorage.getItem("pg2_e1") || DEFAULT_E1;
+  e2El.value  = localStorage.getItem("pg2_e2") || DEFAULT_E2;
+  payEl.value = localStorage.getItem("pg2_payload") || JSON.stringify(JSON.parse(DEFAULT_PAYLOAD), null, 2);
+  prevEl.value= localStorage.getItem("pg2_prev") || "";
+  const k = localStorage.getItem("pg2_key");
+  if (k) { $("apikey").value = k; $("rememberKey").checked = true; }
+  const pv = localStorage.getItem("pg2_provider"); if (pv) $("provider").value = pv;
+  const md = localStorage.getItem("pg2_model");    if (md) $("model").value = md;
+}
+e1El.addEventListener("input", ()=>localStorage.setItem("pg2_e1", e1El.value));
+e2El.addEventListener("input", ()=>localStorage.setItem("pg2_e2", e2El.value));
+payEl.addEventListener("input", ()=>localStorage.setItem("pg2_payload", payEl.value));
+prevEl.addEventListener("input", ()=>localStorage.setItem("pg2_prev", prevEl.value));
+$("apikey").addEventListener("input", e => { if ($("rememberKey").checked) localStorage.setItem("pg2_key", e.target.value); });
+$("rememberKey").addEventListener("change", e => { if (!e.target.checked) localStorage.removeItem("pg2_key"); });
+$("provider").addEventListener("change", e => localStorage.setItem("pg2_provider", e.target.value));
+$("model").addEventListener("input", e => localStorage.setItem("pg2_model", e.target.value));
+
+$("resetBtn").addEventListener("click", () => {
+  if (!confirm("Descartar edições de prompts e payload?")) return;
+  ["pg2_e1","pg2_e2","pg2_payload"].forEach(k=>localStorage.removeItem(k));
+  loadInitial();
+});
+$("useLastBtn").addEventListener("click", () => {
+  const last = localStorage.getItem("pg2_last_diag");
+  if (!last) { alert("Nenhum run anterior salvo ainda."); return; }
+  prevEl.value = last; localStorage.setItem("pg2_prev", last);
+});
+
+function fmt(tpl, vals) {
+  let s = tpl;
+  for (const [k,v] of Object.entries(vals)) s = s.split("{"+k+"}").join(v);
+  return s;
+}
+
+async function callLLM(prompt, mode) {
+  const provider = $("provider").value, model = $("model").value.trim(), key = $("apikey").value.trim();
+  if (provider === "gemini") {
+    const cfg = { temperature: 0.4, maxOutputTokens: 65536 };
+    if (mode === "json") { cfg.responseMimeType = "application/json"; cfg.responseSchema = STAGE1_SCHEMA; }
+    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method:"POST", headers:{ "Content-Type":"application/json", "x-goog-api-key":key },
+      body: JSON.stringify({ contents:[{parts:[{text:prompt}]}], generationConfig: cfg }),
+    });
+    const j = await resp.json();
+    if (!resp.ok) throw new Error(`Gemini ${resp.status}: ${j.error?.message || JSON.stringify(j)}`);
+    return (j.candidates?.[0]?.content?.parts || []).map(p=>p.text||"").join("");
+  }
+  if (provider === "openai") {
+    const body = { model, temperature:0.4, messages:[{role:"user",content:prompt}] };
+    if (mode === "json") body.response_format = { type:"json_object" };
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method:"POST", headers:{ "Content-Type":"application/json", Authorization:`Bearer ${key}` }, body: JSON.stringify(body) });
+    const j = await resp.json();
+    if (!resp.ok) throw new Error(`OpenAI ${resp.status}: ${j.error?.message || JSON.stringify(j)}`);
+    return j.choices[0].message.content;
+  }
+  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    method:"POST", headers:{ "Content-Type":"application/json", "x-api-key":key,
+      "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" },
+    body: JSON.stringify({ model, max_tokens:16384, temperature:0.4, messages:[{role:"user",content:prompt}] }) });
+  const j = await resp.json();
+  if (!resp.ok) throw new Error(`Anthropic ${resp.status}: ${j.error?.message || JSON.stringify(j)}`);
+  return (j.content||[]).map(b=>b.text||"").join("");
+}
+
+function parseJSONLoose(text) {
+  let t = text.trim().replace(/^```(?:json)?\s*|\s*```$/g, "");
+  const s = t.indexOf("{"), e = t.lastIndexOf("}");
+  if (s === -1 || e <= s) throw new Error("resposta sem JSON reconhecível (truncada?) — " + t.length + " chars");
+  return JSON.parse(t.slice(s, e+1));
+}
+
+function parseBlocos(text) {
+  const out = {};
+  for (const tag of ["pareceres","recomendacoes","leitura_portfolio","resumo_slack"]) {
+    const m = text.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, "i"));
+    if (m) out[tag] = m[1].trim();
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function renderTriagem(tri) {
+  const rows = tri.ordem_de_prioridade.map(p => {
+    const t = tri.por_partner[p];
+    const cls = { alarme:"b-alarme", atencao:"b-atencao", ok:"b-ok" }[t.status_geral] || "b-outro";
+    const cel = c => {
+      const x = t.canais[c];
+      if (!x) return "—";
+      const k = { alarme:"b-alarme", atencao:"b-atencao", ok:"b-ok" }[x.status] || "b-outro";
+      const v = x.base_de_julgamento === "cac" ? `CAC ${x.cac_30d!=null?"R$"+Math.round(x.cac_30d):"—"}`
+              : x.base_de_julgamento === "cpl" ? `CPL ${x.cpl_30d!=null?"R$"+Math.round(x.cpl_30d):"—"}` : "—";
+      return `<span class="${k}">${x.status}</span><br><span style="font-size:.72rem;opacity:.75">${v}${x.gargalo_relevante?" · gargalo":""}</span>`;
+    };
+    return `<tr><td><strong>${esc(p)}</strong></td><td class="${cls}">${t.status_geral}</td>
+      <td>${cel("google")}</td><td>${cel("meta")}</td>
+      <td>${t.conta.cac_30d!=null?"R$"+Math.round(t.conta.cac_30d):"—"}</td>
+      <td>${t.conta.cpl_30d!=null?"R$"+Math.round(t.conta.cpl_30d):"—"}</td>
+      <td>${t.canal_critico}</td>
+      <td>${t.tendencia_leads_8sem||"—"}</td>
+      <td>${t.risco_churn?'<span class="b-alarme">sim</span>':"não"}</td>
+      <td style="font-size:.72rem">${esc(t.motivo||"")}</td></tr>`;
+  }).join("");
+  return `<table class="tri"><thead><tr><th>Partner</th><th>Status (conta)</th><th>Google</th><th>Meta</th>
+    <th>CAC conta</th><th>CPL conta</th><th>Canal crítico</th><th>Tend. leads</th><th>Churn</th>
+    <th>Motivo</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderRelatorio(blocos) {
+  const style = `body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;margin:0;padding:10px;
+    color:#1c2733;background:transparent;line-height:1.55;font-size:13.5px}
+    h2{font-size:1rem;border-bottom:2px solid #dde2e8;padding-bottom:5px;margin:20px 0 8px}
+    h2:first-child{margin-top:0} h3{font-size:.9rem;margin:14px 0 2px}
+    table{border-collapse:collapse;width:100%;font-size:.78rem;margin:10px 0}
+    th,td{border:1px solid #dde2e8;padding:5px 8px;text-align:left;vertical-align:top} th{background:#eaf2fc}
+    @media (prefers-color-scheme:dark){body{color:#e6e9ef}h2{border-color:#2b323e}
+    th,td{border-color:#2b323e}th{background:#1c2c47}}`;
+  const html = `<h2>Leitura do Portfólio</h2>${blocos.leitura_portfolio||""}
+    <h2>Parecer por Partner</h2>${blocos.pareceres||""}
+    <h2>Recomendações</h2>${blocos.recomendacoes||""}`;
+  const clean = html.replace(/<\s*\/?\s*(script|style|iframe|link|meta)\b[^>]*>/gi, "");
+  const f = document.createElement("iframe");
+  f.setAttribute("sandbox","");
+  f.srcdoc = `<!doctype html><html><head><meta charset="utf-8"><style>${style}</style></head><body>${clean}</body></html>`;
+  $("o-rel").innerHTML = ""; $("o-rel").appendChild(f);
+}
+
+function renderChecks(res) {
+  const html = res.map(r => r.lvl === "h" ? `<h4>${esc(r.msg)}</h4>`
+    : `<div class="${r.lvl==="fail"?"fail":r.lvl==="warn"?"warn":"pass"}">${esc(r.msg)}</div>`).join("");
+  setPane("o-chk", `<div class="chk">${html}</div>`);
+}
+
+async function run(fullChain) {
+  const key = $("apikey").value.trim();
+  if (!key) { statusEl.textContent="Cole uma API key primeiro."; statusEl.className="status error"; return; }
+  let payload;
+  try { payload = JSON.parse(payEl.value); }
+  catch (e) { statusEl.textContent="Payload não é JSON válido: "+e.message; statusEl.className="status error"; return; }
+
+  ["s0","s1","s2","sv"].forEach(s=>step(s,""));
+  $("runBtn").disabled = $("run1Btn").disabled = true;
+  statusEl.className = "status";
+  const t0 = performance.now();
+  const cover = (payload.data_corte || "").slice(0,10);
+  const prev = prevEl.value.trim() || "[]  (primeira semana — sem diagnóstico anterior)";
+
+  try {
+    // ── estágio 0
+    step("s0","run");
+    statusEl.innerHTML = '<span class="spinner"></span> estágio 0 — triagem…';
+    const tri = triar(payload);
+    payload.triagem = tri;
+    setPane("o-tri", renderTriagem(tri));
+    show("o-tri");
+    step("s0","done");
+
+    // ── estágio 1
+    step("s1","run");
+    statusEl.innerHTML = '<span class="spinner"></span> estágio 1 — diagnóstico…';
+    const p1 = fmt(e1El.value, { cover, payload: JSON.stringify(payload), diagnostico_anterior: prev });
+    $("finalPrompt").textContent = p1;
+    $("finalPrompt").className = "";
+    const raw1 = await callLLM(p1, "json");
+    const diag = parseJSONLoose(raw1);
+    setPane("o-diag", "<pre>"+esc(JSON.stringify(diag,null,2))+"</pre>");
+    localStorage.setItem("pg2_last_diag", JSON.stringify(diag,null,2));
+    step("s1","done");
+    show("o-diag");
+
+    let blocos = null, raw2 = "";
+    if (fullChain) {
+      // ── estágio 2
+      step("s2","run");
+      statusEl.innerHTML = '<span class="spinner"></span> estágio 2 — redação…';
+      const p2 = fmt(e2El.value, { cover, diagnostico_json: JSON.stringify(diag), diagnostico_anterior: prev });
+      raw2 = await callLLM(p2, "text");
+      blocos = parseBlocos(raw2);
+      if (!blocos) throw new Error("estágio 2 não devolveu os blocos XML esperados");
+      renderRelatorio(blocos);
+      setPane("o-slack", "<pre>"+esc(blocos.resumo_slack||"")+"</pre>");
+      step("s2","done");
+      show("o-rel");
+    }
+
+    step("sv","run");
+    renderChecks(validar(payload, tri, diag, blocos));
+    step("sv","done");
+    setPane("o-raw", "<pre>"+esc("── ESTÁGIO 1 ──\n"+raw1+(raw2?"\n\n── ESTÁGIO 2 ──\n"+raw2:""))+"</pre>");
+
+    const dt = ((performance.now()-t0)/1000).toFixed(1);
+    statusEl.textContent = `OK em ${dt}s · prompt e1: ${p1.length.toLocaleString("pt-BR")} chars · diagnóstico: ${raw1.length.toLocaleString("pt-BR")} chars`
+      + (raw2 ? ` · relatório: ${raw2.length.toLocaleString("pt-BR")} chars` : "");
+  } catch (e) {
+    ["s0","s1","s2","sv"].forEach(s => { if ($(s).className === "run") step(s,"fail"); });
+    statusEl.textContent = "Erro: " + e.message;
+    statusEl.className = "status error";
+  } finally {
+    $("runBtn").disabled = $("run1Btn").disabled = false;
+  }
+}
+
+$("runBtn").addEventListener("click", () => run(true));
+$("run1Btn").addEventListener("click", () => run(false));
+loadInitial();
+</script>
+</body>
+</html>

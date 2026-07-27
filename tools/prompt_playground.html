@@ -64,10 +64,13 @@
       </select>
     </label>
     <label>Modelo
-      <input id="model" type="text" value="gemini-2.5-pro" list="modelos">
+      <input id="model" type="text" value="gemini-2.5-flash" list="modelos">
       <datalist id="modelos">
-        <option value="gemini-2.5-pro">
         <option value="gemini-2.5-flash">
+        <option value="gemini-3.1-pro-preview">
+        <option value="gemini-3.5-flash">
+        <option value="gemini-3.6-flash">
+        <option value="gemini-2.5-pro">
         <option value="gpt-4o-mini">
         <option value="claude-haiku-4-5-20251001">
       </datalist>
@@ -140,10 +143,12 @@ promptEl.addEventListener('input', () => { updateCounts(); localStorage.setItem(
 payloadEl.addEventListener('input', () => { updateCounts(); localStorage.setItem('pg_payload', payloadEl.value); });
 
 document.getElementById('resetBtn').addEventListener('click', () => {
-  if (!confirm('Descartar suas edições e voltar pro prompt/payload padrão?')) return;
-  localStorage.removeItem('pg_prompt'); localStorage.removeItem('pg_payload');
+  if (!confirm('Descartar suas edições (prompt, payload, modelo, provider) e voltar pro padrão?')) return;
+  ['pg_prompt', 'pg_payload', 'pg_model', 'pg_provider'].forEach(k => localStorage.removeItem(k));
   promptEl.value = DEFAULT_TEMPLATE;
   payloadEl.value = JSON.stringify(JSON.parse(DEFAULT_PAYLOAD), null, 2);
+  document.getElementById('model').value = 'gemini-2.5-flash';
+  document.getElementById('provider').value = 'gemini';
   updateCounts();
 });
 
