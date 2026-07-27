@@ -655,6 +655,13 @@ Não recalcule nem reinterprete:
 - tendencia_semanal_por_partner: direção da série de 8 semanas (alta/queda/estavel, comparando
   1ª metade com 2ª metade) e há quantas semanas seguidas o valor está estável (dentro de ±15%
   da média das 8). Use isso pra dizer "há N semanas", não invente esse número.
+- triagem: status por partner (ok/atencao/alarme/sem_base/dado_suspeito/ramp) JÁ CALCULADO em
+  código a partir de limiares fixos de CAC/CPL (não pelo modelo). Vem em
+  triagem.por_partner[partner].status_geral, com o motivo em .motivo, o canal mais problemático em
+  .canal_critico e risco de churn (CAC acima do alarme por 2 janelas de 30d seguidas com leads em
+  queda/estáveis) em .risco_churn. NÃO recalcule nem reclassifique esse status: se a triagem diz
+  "ok", o parecer não pode soar como alarme, e vice-versa. O julgamento textual explica o PORQUÊ do
+  status, nunca discorda dele.
 - Valores monetários em R$ (BRL).
 </definicoes_fixas>
 
@@ -701,6 +708,12 @@ Não recalcule nem reinterprete:
 <como_pensar>
 Antes de escrever, monte internamente o quadro de cada partner — NESTA ORDEM (não pule etapas):
 
+0. Leia triagem.por_partner[partner] primeiro: status_geral e motivo já vêm prontos, calculados
+   por regra fixa, não por você. Seu trabalho não é decidir se a conta está bem ou mal — é explicar
+   POR QUE ela está no status que a triagem já determinou, usando os passos 1-6 abaixo como
+   evidência. Se dias_de_dados < 14 (status "ramp"), diga só que a conta está em ramp e o que
+   observar. Se status for "dado_suspeito", não diagnostique performance — a ação é verificar
+   rastreamento.
 1. Abra por gargalo_funil_30d e tendencia_semanal_por_partner primeiro. gargalo_funil_30d já
    aponta a etapa mais fraca do meio de funil (google: sessoes>clickoff, clickoff>redirect,
    redirect>leads; meta: chat_start>zip_search, zip_search>redirect, redirect>leads) — é o
@@ -768,6 +781,11 @@ Padrões de diagnóstico úteis:
 - NÃO comente crédito, saldo ou runway do pacote — já existem alertas dedicados a isso. Escopo
   deste relatório: performance de campanha e gargalos de funil, só.
 - NÃO ultrapasse 5 frases por parecer de partner. Limite duro.
+- NÃO contradiga triagem.por_partner[partner].status_geral. Uma conta marcada "ok" não pode ganhar
+  tom de alarme (nem virar recomendação de "não aumentar verba"/"parar tudo"); uma conta marcada
+  "alarme" não pode ser descrita como "estável" ou "consolidando alta". Cashback alto sozinho
+  numa conta com status "ok" nunca é motivo pra tom de alarme — é cobertura, releia
+  <contexto_negocio>.
 </o_que_nao_fazer>
 
 <regua_de_qualidade>

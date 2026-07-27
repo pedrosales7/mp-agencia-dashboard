@@ -544,9 +544,16 @@ def main():
         try:
             payload = ai_analysis.build_payload(
                 all_daily, all_dfg, all_dfm, cutoff_dt, VALID_PARTNERS)
+            # triagem por regra fixa (código, não LLM) — entra no payload que vai pro
+            # prompt (pra ancorar o status que o modelo não pode contradizer) e é
+            # renderizada direto no HTML publicado, pra nunca divergir do que o
+            # modelo escreveu (ver <definicoes_fixas>/<como_pensar> item 0 do prompt).
+            triagem = ai_analysis.triar(payload)
+            payload["triagem"] = triagem
             result = ai_analysis.generate(payload, cover)
+            body = ai_analysis.render_triagem_html(triagem) + result["relatorio_html"]
             with open(ANALYSIS_PATH, "w", encoding="utf-8") as f:
-                f.write(ai_analysis.render_page(result["relatorio_html"], cover, cutoff,
+                f.write(ai_analysis.render_page(body, cover, cutoff,
                                                 model=result.get("_model")))
             analysis_url = (f"{PAGES_URL.rstrip('/')}/analise.html?v={cutoff}"
                             if PAGES_URL else "analise.html")
