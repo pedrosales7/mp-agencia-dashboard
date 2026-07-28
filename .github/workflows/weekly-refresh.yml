@@ -35,6 +35,10 @@ jobs:
           METABASE_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_URL_TEST: ${{ secrets.SLACK_WEBHOOK_URL_TEST }}
+          # Bot token (chat.postMessage) — opcional. Permite responder em thread
+          # (o CAC 30d por partner). Sem essas duas vars, cai pro webhook sem thread.
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ vars.SLACK_CHANNEL_ID }}
           TEST_MODE: ${{ inputs.test_mode }}
           PAGES_URL: ${{ vars.PAGES_URL }}
           SLACK_MENTION_ON_ERROR: '<@U0753LAQU1F>'

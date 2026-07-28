@@ -48,6 +48,13 @@ if TEST_MODE:
 else:
     SLACK_WEBHOOK_URL = os.environ["SLACK_WEBHOOK_URL"]
 
+# Bot token (chat.postMessage) — opcional, só usado fora do TEST_MODE. Permite
+# responder em thread (o Incoming Webhook não retorna o ts da mensagem, então
+# não dá pra encadear resposta nele). Sem essas duas vars, cai de volta pro
+# Incoming Webhook de sempre, sem thread.
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID", "")
+
 DATABASE_ID = 69
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -279,6 +286,23 @@ def agg_daily(rows, d_ini, d_fim, pkey):
 def slack_post(text):
     resp = requests.post(SLACK_WEBHOOK_URL, json={"text": text}, timeout=30)
     resp.raise_for_status()
+
+
+def slack_post_api(text, thread_ts=None):
+    """Posta via chat.postMessage (bot token) — retorna o ts, pra permitir thread."""
+    body = {"channel": SLACK_CHANNEL_ID, "text": text}
+    if thread_ts:
+        body["thread_ts"] = thread_ts
+    resp = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+        json=body, timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack API error: {data.get('error')}")
+    return data["ts"]
 
 
 # ── main ──────────────────────────────────────────────────────────────────
@@ -537,19 +561,19 @@ def main():
     print(f"OK snap={len(full_snapshot)}rows fg={len(full_fg)}rows fm={len(full_fm)}rows "
           f"daily_compact={len(daily_compact)}rows html={len(html)//1024}KB")
 
+    # ── triagem + CAC (código, não LLM — roda sempre, mesmo sem LLM_API_KEY) ──
+
+    payload = ai_analysis.build_payload(
+        all_daily, all_dfg, all_dfm, cutoff_dt, VALID_PARTNERS)
+    triagem = ai_analysis.triar(payload)
+    payload["triagem"] = triagem
+    cac_thread_text = ai_analysis.render_cac_slack(payload)
+
     # ── análise IA (opcional — nunca derruba o refresh) ──────────────────
 
     analysis_block = ""
     if ai_analysis.enabled():
         try:
-            payload = ai_analysis.build_payload(
-                all_daily, all_dfg, all_dfm, cutoff_dt, VALID_PARTNERS)
-            # triagem por regra fixa (código, não LLM) — entra no payload que vai pro
-            # prompt (pra ancorar o status que o modelo não pode contradizer) e é
-            # renderizada direto no HTML publicado, pra nunca divergir do que o
-            # modelo escreveu (ver <definicoes_fixas>/<como_pensar> item 0 do prompt).
-            triagem = ai_analysis.triar(payload)
-            payload["triagem"] = triagem
             result = ai_analysis.generate(payload, cover)
             body = ai_analysis.render_triagem_html(triagem) + result["relatorio_html"]
             with open(ANALYSIS_PATH, "w", encoding="utf-8") as f:
@@ -557,13 +581,13 @@ def main():
                                                 model=result.get("_model")))
             analysis_url = (f"{PAGES_URL.rstrip('/')}/analise.html?v={cutoff}"
                             if PAGES_URL else "analise.html")
-            analysis_block = (f"\n🤖 *Análise IA da semana:*\n{result['resumo_slack']}\n"
-                              f"📄 Relatório completo: {analysis_url}\n")
+            analysis_block = (f"\n*Pontos críticos da semana:*\n{result['resumo_slack']}\n"
+                              f"Relatório completo: {analysis_url}\n")
             print(f"Análise IA ok ({len(result['relatorio_html'])//1024}KB de relatório).")
         except Exception as e:
             print(f"Aviso: análise IA falhou ({type(e).__name__}: {e}) — refresh segue sem ela.",
                   file=sys.stderr)
-            analysis_block = "\n_⚠️ Análise IA indisponível nesta semana._\n"
+            analysis_block = "\n_Análise IA indisponível nesta semana._\n"
     else:
         print("LLM_API_KEY ausente — análise IA pulada.")
 
@@ -571,13 +595,23 @@ def main():
 
     dashboard_url = f"{PAGES_URL}?v={cutoff}" if PAGES_URL else None
     link_line = f"\n{dashboard_url}\n" if dashboard_url else "\n"
-    prefix = "🧪 [TESTE — só você vê isso]\n" if TEST_MODE else ""
+    prefix = "[TESTE — só você vê isso]\n" if TEST_MODE else ""
     channel_mention = "" if TEST_MODE else "\n<!channel>"
-    slack_post(
-        f"{prefix}📊 Dashboard MP Agência — Funil Ads-to-Sale ({cover})\n"
+    main_text = (
+        f"{prefix}Dashboard MP Agência — Funil Ads-to-Sale ({cover})\n"
         f"Dados atualizados com snapshot de {cover}. Acesse o dashboard interativo:"
         f"{link_line}{analysis_block}{channel_mention}"
     )
+
+    if not TEST_MODE and SLACK_BOT_TOKEN and SLACK_CHANNEL_ID:
+        parent_ts = slack_post_api(main_text)
+        if cac_thread_text:
+            slack_post_api(cac_thread_text, thread_ts=parent_ts)
+    else:
+        # sem bot token configurado (ou TEST_MODE): webhook de sempre, sem thread —
+        # o CAC entra na própria mensagem em vez de ficar de fora.
+        tail = f"\n{cac_thread_text}\n" if cac_thread_text else ""
+        slack_post(f"{main_text}{tail}")
 
 
 if __name__ == "__main__":
@@ -585,8 +619,8 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         try:
-            prefix = "🧪 [TESTE] " if TEST_MODE else ""
-            slack_post(f"{prefix}⚠️ Problema no refresh automático do dashboard MP Agência: {e} "
+            prefix = "[TESTE] " if TEST_MODE else ""
+            slack_post(f"{prefix}Problema no refresh automático do dashboard MP Agência: {e} "
                        f"{SLACK_MENTION_ON_ERROR} verifica?")
         except Exception:
             pass

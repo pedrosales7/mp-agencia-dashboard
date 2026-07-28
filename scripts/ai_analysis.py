@@ -574,6 +574,34 @@ TRIAGEM_LABEL = {"ok": "OK", "atencao": "Atenção", "alarme": "Alarme",
                  "sem_base": "Sem base", "dado_suspeito": "Dado suspeito", "ramp": "Ramp"}
 
 
+def render_cac_slack(payload):
+    """CAC 30d por partner ATIVO, separado por canal — pro bloco de thread do Slack.
+
+    Ativo = teve investimento líquido ou lead em 30d na conta (nível agregado);
+    sem isso o partner nem aparece na lista em vez de mostrar tudo "—".
+    """
+    kpis = payload.get("kpis_por_partner_canal_janela", {})
+    partners = payload.get("partners") or list(kpis)
+
+    def fmt(v):
+        return f"R${v:.0f}" if v is not None else "—"
+
+    linhas = []
+    for p in partners:
+        w = kpis.get(p, {})
+        conta = w.get("conta", {}).get("30d", {})
+        if not (conta.get("investimento_liquido") or conta.get("leads")):
+            continue
+        cac_google = w.get("google", {}).get("30d", {}).get("cac")
+        cac_meta = w.get("meta", {}).get("30d", {}).get("cac")
+        cac_conta = conta.get("cac")
+        linhas.append(f"• *{p}*: Google {fmt(cac_google)} · Meta {fmt(cac_meta)} · "
+                      f"Conta {fmt(cac_conta)}")
+    if not linhas:
+        return None
+    return "*CAC 30d por parceiro (canal):*\n" + "\n".join(linhas)
+
+
 def render_triagem_html(triagem):
     """Tabela de triagem do topo do relatório — dado puro, renderizado aqui.
 
@@ -586,7 +614,7 @@ def render_triagem_html(triagem):
         c = v["conta"]
         cac = f"R${c['cac_30d']:.0f}" if c["cac_30d"] is not None else "—"
         cpl = f"R${c['cpl_30d']:.0f}" if c["cpl_30d"] is not None else "—"
-        churn = " ⚠️ risco de churn" if v["risco_churn"] else ""
+        churn = " (risco de churn)" if v["risco_churn"] else ""
         canal = v["canal_critico"] if v["canal_critico"] != "nenhum" else "—"
         linhas.append(
             f"<tr><td><strong>{p}</strong></td><td>{TRIAGEM_LABEL[v['status_geral']]}{churn}</td>"
@@ -824,15 +852,16 @@ antes de escrever. Produza:
 <formato_de_saida>
 Responda SOMENTE com JSON válido, sem markdown em volta:
 {{
-  "resumo_slack": "resumo executivo em até 700 caracteres, formato mrkdwn do Slack (*negrito*, bullets com •): 1 bullet com a leitura da semana (a conclusão, não os números), 2-3 bullets com os diagnósticos mais importantes, 1 bullet com a ação nº 1 da semana",
-  "relatorio_html": "corpo HTML do relatório (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td). Seções: Leitura do Portfólio; Parecer por Partner (um h3 por partner); Recomendações (tabela com colunas Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado, Confiança). Valores em R$ sem centavos."
+  "resumo_slack": "resumo em até 600 caracteres, SÓ os pontos críticos da semana — pra quem vai ler batendo o olho no celular. Formato mrkdwn do Slack (*negrito*, bullets com •), SEM NENHUM EMOJI (nem no texto nem como marcador de bullet). NÃO mencione contas saudáveis, estáveis ou 'indo bem' — se a conta está em status ok da triagem, ela simplesmente não entra aqui. Inclua só: contas em alarme/atenção/risco de churn (com o motivo em poucas palavras) e a ação nº1 da semana. Se NENHUMA conta estiver em alarme ou atenção, diga isso em 1 frase curta e pare — não force um problema que não existe.",
+  "relatorio_html": "corpo HTML do relatório (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td). Seções: Leitura do Portfólio; Parecer por Partner (um h3 por partner); Recomendações (tabela com colunas Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado, Confiança). Valores em R$ sem centavos. SEM emojis em nenhum lugar."
 }}
 Tom: analista de mídia falando com o próprio time — direto, opinativo, específico, do jeito que se
 fala sobre uma conta que você acompanha toda semana (não como consultoria externa avaliando de
 fora). Está tudo bem dizer "vamos acompanhar" quando o dado ainda não fechou uma direção — isso é
 precisão, não é hedge. Estilo enxuto: frases curtas, sem preâmbulos ("vale destacar que", "é
 importante notar"), sem adjetivo que não carrega informação, sem repetir o que outra seção já
-disse. Se dá para dizer em 8 palavras, não use 20. Português do Brasil.
+disse. Se dá para dizer em 8 palavras, não use 20. Nunca use emoji, em nenhum campo da resposta.
+Português do Brasil.
 </formato_de_saida>
 
 DADOS:
@@ -914,6 +943,18 @@ def call_llm(prompt, model_override=None):
     return "".join(b.get("text", "") for b in resp.json()["content"])
 
 
+# faixas unicode de emoji/pictograma — removidos por código em vez de só pedir
+# ao LLM, porque o modelo ignora a instrução de vez em quando (visto em produção).
+EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
+    "\U00002700-\U000027BF\U0001F900-\U0001F9FF\U00002B00-\U00002BFF"
+    "\U0000FE0F\U0000200D]+")
+
+
+def _strip_emoji(text):
+    return EMOJI_RE.sub("", text)
+
+
 def parse_response(text):
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
     start, end = text.find("{"), text.rfind("}")
@@ -927,6 +968,8 @@ def parse_response(text):
     # nunca deixar o LLM injetar script/style na página publicada
     data["relatorio_html"] = re.sub(
         r"<\s*/?\s*(script|style|iframe|link|meta)\b[^>]*>", "", data["relatorio_html"], flags=re.I)
+    data["resumo_slack"] = _strip_emoji(data["resumo_slack"]).strip()
+    data["relatorio_html"] = _strip_emoji(data["relatorio_html"])
     return data
 
 
@@ -995,10 +1038,10 @@ PAGE_TEMPLATE = """<!doctype html>
 <body>
 <div class="wrap">
   <header>
-    <h1>🤖 Análise IA — Funil Ads-to-Sale MP Agência</h1>
+    <h1>Análise IA — Funil Ads-to-Sale MP Agência</h1>
     <p>Snapshot de {cover} · gerada automaticamente no refresh semanal · <a href="index.html?v={cutoff}">← voltar ao dashboard</a></p>
   </header>
-  <div class="aviso">⚠️ Relatório gerado por IA ({provider}/{model}) a partir dos dados do dashboard.
+  <div class="aviso">Relatório gerado por IA ({provider}/{model}) a partir dos dados do dashboard.
   Valide os números no dashboard antes de executar mudanças nas campanhas.</div>
   <main>
 {body}
