@@ -28,25 +28,140 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>🤖 Análise IA — Funil Ads-to-Sale MP Agência</h1>
+    <h1>Análise IA — Funil Ads-to-Sale MP Agência</h1>
     <p>Snapshot de 27/07/26 · gerada automaticamente no refresh semanal · <a href="index.html?v=2026-07-27">← voltar ao dashboard</a></p>
   </header>
-  <div class="aviso">⚠️ Relatório gerado por IA (gemini/gemini-3.1-pro-preview) a partir dos dados do dashboard.
-  Valide os números no dashboard antes de executar mudanças nas campanhas.</div>
+  <div class="aviso">Relatório gerado por IA (gemini/gemini-3.1-pro-preview) a partir dos dados do dashboard.
+  Todo número citado é validado contra a lista de evidências do diagnóstico (estágio 1), mas
+  confira no dashboard antes de mexer em campanha.</div>
   <main>
 <h2>Triagem</h2>
 <table><thead><tr><th>Partner</th><th>Status</th><th>CAC 30d</th><th>CPL 30d</th><th>Vendas 30d</th><th>Canal crítico</th><th>Motivo</th></tr></thead>
 <tbody>
 <tr><td><strong>ultranet-network</strong></td><td>Alarme</td><td>R$362</td><td>R$66</td><td>8</td><td>google</td><td>CAC 30d R$362 acima do teto de R$200</td></tr>
 <tr><td><strong>the fiber internet</strong></td><td>Alarme</td><td>R$228</td><td>R$84</td><td>14</td><td>—</td><td>CAC 30d R$228 acima do teto de R$200</td></tr>
-<tr><td><strong>direct internet</strong></td><td>Alarme ⚠️ risco de churn</td><td>R$219</td><td>R$70</td><td>21</td><td>meta</td><td>CAC 30d R$219 acima do teto de R$200</td></tr>
+<tr><td><strong>direct internet</strong></td><td>Alarme (risco de churn)</td><td>R$219</td><td>R$70</td><td>21</td><td>meta</td><td>CAC 30d R$219 acima do teto de R$200</td></tr>
 <tr><td><strong>enove-fibra</strong></td><td>Alarme</td><td>R$210</td><td>R$112</td><td>8</td><td>meta</td><td>CAC 30d R$210 acima do teto de R$200</td></tr>
 <tr><td><strong>unifique</strong></td><td>Dado suspeito</td><td>—</td><td>—</td><td>0</td><td>—</td><td>investimento em 30d sem nenhum lead em 7d e 30d</td></tr>
 <tr><td><strong>interplus internet</strong></td><td>Sem base</td><td>—</td><td>R$74</td><td>0</td><td>—</td><td>3 lead(s) e 0 venda(s) em 30d — abaixo da base mínima</td></tr>
 <tr><td><strong>loga-internet</strong></td><td>OK</td><td>R$107</td><td>R$41</td><td>67</td><td>—</td><td>CAC 30d R$107 dentro do ideal</td></tr>
 <tr><td><strong>ativa-telecom</strong></td><td>OK</td><td>R$98</td><td>R$54</td><td>6</td><td>—</td><td>CAC 30d R$98 dentro do ideal</td></tr>
 </tbody></table>
-<h2>Leitura do Portfólio</h2><p>A semana mostra um descolamento claro entre o período fechado (30d) e a tendência recente (7d): contas como The Fiber, Ultranet e Enove estão marcadas como alarme pelo histórico do mês, mas já operam com CAC excelente na última semana, exigindo paciência para consolidar a alta. O ralo de dinheiro atual está na Direct Internet, que entrou em risco de churn puxada por um Meta Ads insustentável. A decisão mais importante da semana é estancar a sangria do Meta na Direct e investigar urgente o rastreamento da Unifique, que rodou no escuro.</p><h2>Parecer por Partner</h2><h3>loga-internet</h3><p>A conta está saudável no consolidado, mas o resultado da última semana acende um alerta comercial. O gargalo no Meta continua sendo a etapa de zip_search para redirect, indicando cliques em CEPs fora da base. Apesar disso, o problema real dos últimos 7 dias foi o salto do CAC para R$ 306, causado por uma queda brusca nas vendas, enquanto o volume de leads se manteve estável. [hipótese] O provedor pode estar com gargalo de atendimento ou agenda de instalação lotada, travando o fechamento. Ação: Acionar o responsável pela conta para investigar a operação comercial antes de mexer na mídia.</p><h3>the fiber internet</h3><p>O status é de alarme pelo CAC 30d, mas a tendência é de forte recuperação puxada pelo Google. O Meta está praticamente morto, com gargalo severo na etapa final (redirect para leads) e apenas 2 leads no mês. Em contrapartida, o Google derrubou o CAC da conta para R$ 122 na última semana, mesmo com alguma fricção de sessões para clickoff. [hipótese] O criativo ou a oferta do Meta esgotou e não convence mais o usuário a finalizar o fluxo. Ação: Reduzir drasticamente a verba do Meta e escalar o Google para acelerar a saída da zona de alarme.</p><h3>interplus internet</h3><p>Conta sem base de dados suficiente para análise de performance. Tivemos apenas 3 leads no Google e zero no Meta nos últimos 30 dias, com o investimento praticamente zerado na última semana. Ação: Verificar no painel se as campanhas foram pausadas por falta de saldo ou decisão do parceiro.</p><h3>direct internet</h3><p>Conta em risco de churn, sangrando dinheiro no Meta Ads. O gargalo do Meta é logo no início (cliques para chat_start), gerando um CAC absurdo de R$ 508 no canal. O Google está segurando a operação perto da meta, mas sofre para fazer o usuário clicar na oferta (sessoes para clickoff fraca). [hipótese] O bot do Meta está com lentidão ou a mensagem de saudação está gerando abandono imediato. Ação: Cortar orçamento do Meta hoje e revisar a landing page do Google para deixar a oferta mais agressiva.</p><h3>enove-fibra</h3><p>O alarme de 30d esconde uma conta que já está se salvando: o CAC caiu quase 70% na série histórica e fechou a última semana em ótimos R$ 88. O Google tem dificuldade na conversão final de redirect para lead, enquanto o Meta perde usuários no início do chat. [hipótese] O formulário final do Google pode estar longo ou pedindo dados demais. Ação: Manter a estrutura atual para consolidar a recuperação, mas testar a simplificação do formulário no Google.</p><h3>unifique</h3><p>Dado suspeito: a conta consumiu investimento nos últimos 30 dias, mas não registrou absolutamente nenhum lead em nenhum dos canais. [hipótese] O rastreamento quebrou ou a integração com o dashboard do provedor caiu. Ação: Parar análises de mídia e acionar suporte técnico urgente para validar o tracking.</p><h3>ultranet-network</h3><p>Outro caso de alarme no mês que já virou o jogo: o volume de leads disparou e o CAC caiu para R$ 122 na última semana. O Meta tem gargalo forte de zip_search para redirect, e o cashback subiu, indicando que estamos comprando demanda real, mas fora da área de cobertura. [hipótese] A segmentação geográfica do Meta está ampla demais para a infraestrutura atual do parceiro. Ação: Realocar parte da verba do Meta para o Google enquanto validamos com o parceiro se há interesse em expandir a rede para os CEPs com demanda retida.</p><h3>ativa-telecom</h3><p>Conta em rampagem com excelente saúde: CAC de R$ 98 e volume crescendo. O cashback de 88% não é problema, é prova de que há muita demanda na região que o parceiro ainda não atende. O único ponto de fricção em ambos os canais é a etapa final de redirect para leads. [hipótese] O tempo de carregamento da página final ou o handoff para o WhatsApp do provedor está gerando desistência. Ação: Mapear o fluxo final do lead e apresentar o relatório de cashback ao parceiro como oportunidade de expansão de rede.</p><h2>Recomendações</h2><table><thead><tr><th>Prioridade</th><th>Partner</th><th>Canal</th><th>Ação</th><th>Justificativa</th><th>Impacto esperado</th><th>Confiança</th></tr></thead><tbody><tr><td>1</td><td>direct internet</td><td>Meta</td><td>Pausar ou reduzir verba em 80%</td><td>CAC do canal está em R$ 508 e colocou a conta em risco de churn.</td><td>Estancar desperdício e salvar a margem da conta.</td><td>[confiança alta]</td></tr><tr><td>2</td><td>unifique</td><td>Ambos</td><td>Auditar tracking e integrações</td><td>Houve gasto no mês inteiro sem nenhum lead registrado no painel.</td><td>Voltar a enxergar a performance real da conta.</td><td>[confiança alta]</td></tr><tr><td>3</td><td>the fiber internet</td><td>Google</td><td>Escalar orçamento</td><td>Canal puxou a recuperação da conta com CAC de R$ 122 nos últimos 7d.</td><td>Tirar a conta definitivamente do status de alarme.</td><td>[confiança alta]</td></tr><tr><td>4</td><td>loga-internet</td><td>Ambos</td><td>Investigar operação comercial</td><td>Leads estáveis (28), mas vendas caíram para 3 na semana, inflando o CAC.</td><td>Destravar o fechamento e normalizar o CAC.</td><td>[confiança média]</td></tr><tr><td>5</td><td>ultranet-network</td><td>Meta</td><td>Revisar segmentação de CEPs</td><td>Gargalo no zip_search e cashback alto mostram cliques fora de cobertura.</td><td>Aumentar a taxa de aproveitamento do investimento bruto.</td><td>[confiança média]</td></tr></tbody></table>
+
+<h2>Leitura do Portfólio</h2>
+<p>O CAC geral do portfólio subiu 7.1% nesta semana em relação à anterior. O movimento de alta foi puxado principalmente pela conta Ativa-telecom, enquanto Ultranet-network e The fiber internet seguraram o indicador com ganhos de eficiência. O cenário atual mostra que estamos ganhando dinheiro com a queda generalizada nos custos de aquisição de tráfego, mas perdendo tração severa no fechamento comercial e em quebras técnicas de formulários e bots. A conta que exige ação mais urgente é a Direct Internet, que apresenta risco iminente de churn devido à queda abrupta nas vendas, anulando qualquer ganho de mídia. A decisão mais importante da semana é estancar o sangramento em contas com rastreamento quebrado e focar os esforços em desobstruir as etapas finais de conversão, garantindo que o tráfego mais barato efetivamente vire receita.</p>
+<h2>Parecer por Partner</h2>
+<h3>ultranet-network</h3>
+<p>O CAC da semana não tem base, mas o CPL da conta caiu 59% puxado pela redução do CPC no Google, passando de R$ 65 na semana anterior para R$ 26. A queda de -48.5% no CPC do Google combinada ao aumento de 15.7pp na taxa de cliques para sessões barateou o tráfego qualificado, permitindo gerar 17 leads contra 11 do período anterior. A hipótese é que o leilão do Google ficou menos competitivo ou o índice de qualidade melhorou, enquanto no Meta a segmentação atual capta usuários em áreas não atendidas, gerando abandono. Para validar, devemos acompanhar o CPL do Google nos próximos 7 dias e verificar se a revisão de CEPs no Meta melhora a taxa de zip_search para redirect (atualmente em 38.2%) em 14 dias. A ação da semana é manter as campanhas do Google e revisar a segmentação de CEPs no Meta.</p>
+
+<h3>the fiber internet</h3>
+<p>O CAC da conta caiu 26%, de R$ 177 para R$ 130, impulsionado pelo aumento na taxa de conversão de lead para venda no Google. A melhora de 8.4pp no fechamento comercial compensou a queda de -15.5% nos cliques e o aumento de 37.1% no CPC, mantendo o volume em 12 leads e reduzindo o CAC de 30 dias que está em R$ 228. A hipótese é que a fricção no fluxo final do Meta impede a captação por falha no carregamento ou formulário longo, enquanto no Google a qualificação do tráfego melhorou. Para validar, vamos monitorar a taxa de redirect para leads no Meta (hoje em 10.0%) nos próximos 7 dias após os ajustes. A ação é investigar o fluxo do Meta na etapa de redirect para leads e manter a estrutura do Google.</p>
+
+<h3>direct internet</h3>
+<p>O CAC da conta subiu levemente para R$ 264 devido à queda na taxa de fechamento de vendas, anulando a melhora do CPL, que caiu de R$ 86 para R$ 56. A queda de -11.9pp na conversão de lead para venda travou o CAC de 30 dias em R$ 219, agravado pelo gargalo de sessões para clickoff no Google, que está em 21.7%. A hipótese é que a queda no fechamento indica problemas no funil comercial do provedor ou segmentação atraindo público desqualificado, e a baixa interação aponta oferta fraca. Validaremos acompanhando a taxa de lead para venda nos próximos 7 a 14 dias após alinhamento comercial e observando o clickoff no Google. A ação urgente é alinhar com o parceiro sobre o fechamento e revisar a oferta da landing page do Google.</p>
+
+<h3>enove-fibra</h3>
+<p>O CAC da semana fechou em R$ 173 com a reativação da conta via aumento expressivo de investimento de 1016.1%. Esse salto forçou a entrega das campanhas e, com a melhora de 9.3pp na taxa de cliques para chat_start no Meta, o CPL do canal fechou em R$ 83, ajudando a diluir o CAC de 30 dias que está em R$ 210. A hipótese é que os criativos do Meta não deixam claro o direcionamento ao WhatsApp, gerando abandono, e o formulário do Google possui erro técnico ou é muito longo. Para validar, monitoraremos as taxas de cliques para chat_start no Meta (19.5%) e redirect para leads no Google (15.4%) nos próximos 7 dias. A ação é trocar criativos no Meta e simplificar o formulário no Google.</p>
+
+<h3>unifique</h3>
+<p>A conta consumiu R$ 202 de investimento líquido em 30 dias sem registrar nenhum lead, indicando quebra estrutural grave que exige pausa imediata das campanhas e auditoria completa no rastreamento de conversões e links.</p>
+
+<h3>interplus internet</h3>
+<p>A conta não possui base de vendas em 30 dias e gerou apenas 3 leads no período, exigindo teste exaustivo no fluxo do bot do Meta (0.0% em chat_start para zip_search) e expansão do raio de cobertura no Google (22.7% em clickoff para redirect).</p>
+
+<h3>loga-internet</h3>
+<p>O CAC da conta caiu para R$ 132 puxado por uma forte redução no CPL do Google, que compensou a queda no fechamento. A queda de -37.2% no CPC do Google reduziu o CPL do canal para R$ 30, o que derrubou o CPL da conta de R$ 48 para R$ 30, absorvendo a queda de -9.4pp na conversão de lead para venda e mantendo o CAC de 30 dias em saudáveis R$ 107. A hipótese é que a otimização do algoritmo encontrou bolsões de tráfego mais baratos, sendo a queda no fechamento uma flutuação natural. Validaremos monitorando o CPL e o CPC do Google nos próximos 7 dias para confirmar a estabilidade do leilão. A ação é manter a estrutura atual e compartilhar os dados de queda no fechamento com o parceiro.</p>
+
+<h3>ativa-telecom</h3>
+<p>Não há base de vendas na semana para calcular CAC, mas o CPL do Google caiu para R$ 31 com a redução de -34.0% no CPC. O barateamento do tráfego manteve a geração de leads, mas o volume é limitado pela forte fricção na etapa de redirect para leads, que está em 12.0% no Google e 0.9% no Meta, mantendo o CAC de 30 dias em R$ 98. A hipótese é que o formulário da landing page está longo demais ou lento, e no Meta a transição para o WhatsApp possui link quebrado. Para validar, acompanharemos a taxa de redirect para leads nos próximos 7 dias. A ação é revisar a landing page do Google e o fluxo final do WhatsApp no Meta.</p>
+<h2>Recomendações</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Prioridade</th>
+      <th>Partner</th>
+      <th>Canal</th>
+      <th>Ação</th>
+      <th>Justificativa</th>
+      <th>Impacto esperado</th>
+      <th>Confiança</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>unifique</td>
+      <td>ambos</td>
+      <td>Pausar campanhas e auditar rastreamento de conversões e links.</td>
+      <td>Conta consumindo verba sem registrar nenhum lead em 30 dias.</td>
+      <td>Estancar desperdício de verba e reativar a medição correta para o algoritmo.</td>
+      <td>alta</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>direct internet</td>
+      <td>google</td>
+      <td>Revisar oferta na landing page para torná-la mais agressiva.</td>
+      <td>Risco de churn ativo com CAC estagnado e gargalo severo em sessões>clickoff.</td>
+      <td>Aumentar o engajamento na página e gerar leads mais qualificados para reverter a queda de vendas.</td>
+      <td>alta</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>ultranet-network</td>
+      <td>meta</td>
+      <td>Revisar segmentação de CEPs nas campanhas.</td>
+      <td>Taxa de zip_search>redirect muito fraca (38.2%), indicando tráfego fora da área de cobertura.</td>
+      <td>Reduzir o abandono no bot e melhorar a qualificação dos leads que chegam ao final do fluxo.</td>
+      <td>alta</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>the fiber internet</td>
+      <td>meta</td>
+      <td>Investigar e corrigir atritos na etapa de redirect para leads.</td>
+      <td>Canal inoperante com taxa de conversão final em apenas 10%, secando a geração de leads.</td>
+      <td>Reativar a captação de leads no Meta para diminuir a dependência exclusiva do Google.</td>
+      <td>alta</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>enove-fibra</td>
+      <td>ambos</td>
+      <td>Trocar criativos no Meta e simplificar formulário no Google.</td>
+      <td>Gargalos em cliques>chat_start no Meta e redirect>leads no Google limitam o volume.</td>
+      <td>Destravar o funil em ambos os canais para aproveitar o aumento recente de investimento.</td>
+      <td>media</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>interplus internet</td>
+      <td>ambos</td>
+      <td>Testar fluxo do bot no Meta e expandir raio de cobertura no Google.</td>
+      <td>Conta sem vendas em 30 dias devido a abandono total no bot e baixa viabilidade de CEPs.</td>
+      <td>Restabelecer a entrada de leads qualificados para reabastecer o funil comercial.</td>
+      <td>alta</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>ativa-telecom</td>
+      <td>ambos</td>
+      <td>Revisar landing page e fluxo final do WhatsApp.</td>
+      <td>Forte fricção na etapa de redirect>leads em ambos os canais está limitando o volume.</td>
+      <td>Aumentar a conversão final para transformar o tráfego barato em volume real de leads.</td>
+      <td>alta</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>loga-internet</td>
+      <td>ambos</td>
+      <td>Manter estrutura atual e alinhar com comercial sobre fechamento.</td>
+      <td>Campanhas performando muito bem, mas taxa de fechamento de vendas caiu na última semana.</td>
+      <td>Garantir que o alto volume de leads baratos seja convertido em vendas pelo provedor.</td>
+      <td>alta</td>
+    </tr>
+  </tbody>
+</table>
   </main>
   <footer>MP Agência · Melhor Plano — atualizado em 27/07/26.</footer>
 </div>

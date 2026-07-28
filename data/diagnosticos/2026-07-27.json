@@ -1,0 +1,500 @@
+{
+ "partners": [
+  {
+   "partner": "ultranet-network",
+   "status_geral": "alarme",
+   "eixo_principal": "cpl",
+   "canal_critico": "google",
+   "diagnostico": "O CAC de 30 dias está em alarme (R$362), mas a semana atual mostra uma forte recuperação na eficiência. O CPL consolidado caiu 59% em relação à semana anterior, passando de R$65 para R$26. Esse movimento foi liderado pelo Google, onde o custo por clique despencou e a conversão de topo de funil melhorou significativamente. O volume de leads subiu de 11 para 17, indicando ganho de tração.",
+   "cadeia_causal": "A queda expressiva no CPC do Google (-48.5%) combinada com o aumento na taxa de cliques para sessões (+15.7pp) barateou o tráfego qualificado. Isso derrubou o CPL do canal para R$23 e puxou o CPL da conta para R$26, permitindo gerar mais leads com menos verba e indicando um caminho para a redução do CAC.",
+   "acao_semana": "Manter as configurações atuais das campanhas no Google, que encontraram um leilão mais favorável. No Meta, revisar a segmentação de CEPs, pois a taxa de zip_search para redirect está fraca (38.2%), indicando tráfego fora da área de cobertura.",
+   "confianca": "alta",
+   "evidencias_citadas": [
+    {
+     "metrica": "CAC",
+     "valor": "362.12",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "26.59",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "65.27",
+     "janela": "7d_prev",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPC",
+     "valor": "-48.5%",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "cliques>sessoes",
+     "valor": "15.7pp",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "leads",
+     "valor": "17",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "leads",
+     "valor": "11",
+     "janela": "7d_prev",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "zip_search>redirect",
+     "valor": "38.2%",
+     "janela": "30d",
+     "canal": "meta"
+    }
+   ],
+   "risco_churn": false,
+   "movimento_semanal": "O CAC da semana não tem base, mas o CPL da conta caiu 59% puxado pela redução do CPC no Google.",
+   "como_validar": "Acompanhar o CPL do Google nos próximos 7 dias para confirmar se o novo patamar de CPC se sustenta. No Meta, verificar se a revisão de CEPs melhora a taxa de redirect em 14 dias, refletindo em leads mais qualificados.",
+   "hipotese": "O leilão do Google ficou menos competitivo ou o índice de qualidade dos anúncios melhorou, reduzindo o CPC. No Meta, a segmentação atual está captando usuários em áreas não atendidas, gerando abandono na etapa de busca por CEP."
+  },
+  {
+   "partner": "the fiber internet",
+   "status_geral": "alarme",
+   "eixo_principal": "cac",
+   "canal_critico": "nenhum",
+   "diagnostico": "O CAC de 30 dias encontra-se na zona de alarme (R$228), porém o comparativo semanal revela uma tendência de queda. O CAC da conta reduziu 26%, caindo de R$177 para R$130, movimento totalmente sustentado pelo Google. O Meta continua sem gerar leads, apresentando um gargalo severo na etapa final de conversão. O volume total de leads manteve-se estável em 12, mas com melhor aproveitamento comercial.",
+   "cadeia_causal": "O aumento na taxa de conversão de lead para venda no Google (+8.4pp) foi o principal motor da semana. Essa melhora no fechamento comercial compensou a queda no volume de cliques (-15.5%) e o aumento do CPC (+37.1%), resultando na redução do CAC consolidado para R$130, mesmo com o Meta inoperante.",
+   "acao_semana": "Investigar o fluxo do Meta, especificamente a etapa de redirect para leads, que está em apenas 10%. Revisar o formulário ou o bot do WhatsApp para eliminar atritos. No Google, manter a estrutura que está entregando vendas.",
+   "confianca": "alta",
+   "evidencias_citadas": [
+    {
+     "metrica": "CAC",
+     "valor": "228.29",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CAC",
+     "valor": "130.8",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CAC",
+     "valor": "177.0",
+     "janela": "7d_prev",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "lead>venda",
+     "valor": "8.4pp",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "cliques",
+     "valor": "-15.5%",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "CPC",
+     "valor": "37.1%",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "redirect>leads",
+     "valor": "10.0%",
+     "janela": "30d",
+     "canal": "meta"
+    },
+    {
+     "metrica": "leads",
+     "valor": "12",
+     "janela": "7d",
+     "canal": "ambos"
+    }
+   ],
+   "risco_churn": false,
+   "movimento_semanal": "O CAC da conta caiu 26% impulsionado pelo aumento na taxa de conversão de lead para venda no Google.",
+   "como_validar": "Monitorar a taxa de redirect para leads no Meta nos próximos 7 dias após os ajustes no fluxo. Espera-se que a taxa suba para o patamar dos pares (29%), reativando a geração de leads e aliviando a dependência do Google.",
+   "hipotese": "A fricção no fluxo final do Meta (redirect>leads) está impedindo a captação, possivelmente por falha no carregamento ou formulário longo. No Google, a qualificação do tráfego melhorou, refletindo na maior taxa de vendas."
+  },
+  {
+   "partner": "direct internet",
+   "status_geral": "alarme",
+   "eixo_principal": "funil",
+   "canal_critico": "meta",
+   "diagnostico": "A conta apresenta risco de churn com o CAC de 30 dias estagnado em alarme (R$219). Na última semana, o CAC subiu ligeiramente para R$264, apesar da melhora expressiva no CPL, que caiu 34% (para R$56). O problema central migrou para o fechamento comercial, que despencou. No Google, a baixa taxa de sessões para clickoff indica que a oferta não está atraindo os usuários que chegam à landing page.",
+   "cadeia_causal": "A queda acentuada na taxa de conversão de lead para venda (-11.9pp) anulou completamente o ganho de eficiência na captação (CPL 34% menor). Com menos leads virando clientes, o CAC da conta travou em R$264. O gargalo de sessões para clickoff no Google (21.7%) reforça a falta de competitividade.",
+   "acao_semana": "Alinhar urgentemente com o parceiro sobre a queda no fechamento de vendas para entender se há gargalo no atendimento. Na mídia, revisar a oferta da landing page do Google para torná-la mais agressiva e melhorar o clickoff.",
+   "confianca": "alta",
+   "evidencias_citadas": [
+    {
+     "metrica": "CAC",
+     "valor": "219.05",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CAC",
+     "valor": "264.0",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "56.57",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "86.17",
+     "janela": "7d_prev",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "lead>venda",
+     "valor": "-11.9pp",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "sessoes>clickoff",
+     "valor": "21.7%",
+     "janela": "30d",
+     "canal": "google"
+    }
+   ],
+   "risco_churn": true,
+   "movimento_semanal": "O CAC da conta subiu levemente (+2%) devido à queda na taxa de fechamento de vendas, anulando a melhora do CPL.",
+   "como_validar": "Acompanhar a taxa de lead para venda nos próximos 7 a 14 dias após o alinhamento comercial. Na mídia, observar se a taxa de sessões para clickoff no Google se aproxima da média dos pares (44%) após a troca da oferta.",
+   "hipotese": "A queda no fechamento indica problemas no funil comercial do provedor (atendimento/instalação) ou que a segmentação barateou o lead atraindo público desqualificado. A baixa interação na landing page aponta oferta fraca."
+  },
+  {
+   "partner": "enove-fibra",
+   "status_geral": "alarme",
+   "eixo_principal": "funil",
+   "canal_critico": "meta",
+   "diagnostico": "O CAC de 30 dias está em alarme (R$210), mas a semana foi marcada por uma injeção massiva de investimento (+1016%), reativando a conta. Esse salto gerou 3 leads e 2 vendas, com um CAC semanal promissor de R$173. O Meta é o canal crítico, sofrendo com baixa taxa de cliques para chat_start (19.5%). No Google, o tráfego trava na etapa final, com forte fricção no formulário (redirect para leads em 15.4%).",
+   "cadeia_causal": "O aumento abrupto de investimento (+1016.1%) forçou a entrega das campanhas, gerando volume inicial. No Meta, houve uma leve melhora na taxa de cliques para chat_start (+9.3pp), o que permitiu fechar o CPL do canal em R$83, viabilizando as vendas da semana e reduzindo o CAC temporariamente.",
+   "acao_semana": "Trocar os criativos e CTAs no Meta para reduzir o atrito inicial e melhorar a taxa de chat_start. No Google, simplificar imediatamente o formulário da landing page para destravar a etapa de redirect para leads.",
+   "confianca": "media",
+   "evidencias_citadas": [
+    {
+     "metrica": "CAC",
+     "valor": "210.25",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "investimento",
+     "valor": "1016.1%",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CAC",
+     "valor": "173.0",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "cliques>chat_start",
+     "valor": "19.5%",
+     "janela": "30d",
+     "canal": "meta"
+    },
+    {
+     "metrica": "redirect>leads",
+     "valor": "15.4%",
+     "janela": "30d",
+     "canal": "google"
+    },
+    {
+     "metrica": "cliques>chat_start",
+     "valor": "9.3pp",
+     "janela": "7d",
+     "canal": "meta"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "83.0",
+     "janela": "7d",
+     "canal": "meta"
+    }
+   ],
+   "risco_churn": false,
+   "movimento_semanal": "O CAC da semana fechou em R$173 com a reativação da conta via aumento expressivo de investimento.",
+   "como_validar": "Monitorar as taxas de cliques>chat_start no Meta e redirect>leads no Google nos próximos 7 dias. O objetivo é que ambas ultrapassem a marca de 25%, confirmando que a fricção foi reduzida e o tráfego está fluindo.",
+   "hipotese": "Os criativos do Meta não estão deixando claro que o clique leva ao WhatsApp, gerando abandono imediato. No Google, o formulário de captação é muito longo ou apresenta erro técnico, impedindo a conversão final do lead."
+  },
+  {
+   "partner": "unifique",
+   "status_geral": "dado_suspeito",
+   "eixo_principal": "rastreamento",
+   "canal_critico": "nenhum",
+   "diagnostico": "A conta encontra-se em estado crítico de dados suspeitos. Houve consumo de investimento líquido (R$202) nos últimos 30 dias, distribuído entre as campanhas de Google e Meta, mas absolutamente nenhum lead foi registrado nas janelas de 7 e 30 dias. A ausência total de conversões de topo de funil impossibilita qualquer leitura de performance, otimização de leilão ou cálculo de métricas como CAC e CPL.",
+   "cadeia_causal": "O consumo contínuo de verba sem a correspondente geração de leads indica uma quebra estrutural grave. O tráfego está sendo comprado normalmente, mas uma provável falha no rastreamento de conversões ou links quebrados nas campanhas impede que as plataformas registrem os eventos, cegando completamente o algoritmo.",
+   "acao_semana": "Pausar as campanhas temporariamente para evitar desperdício de verba e realizar uma auditoria completa no rastreamento de conversões (pixel/tags), além de testar o funcionamento das landing pages e fluxos de WhatsApp.",
+   "confianca": "alta",
+   "evidencias_citadas": [
+    {
+     "metrica": "investimento_liquido",
+     "valor": "202",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "leads",
+     "valor": "0",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "leads",
+     "valor": "0",
+     "janela": "7d",
+     "canal": "ambos"
+    }
+   ],
+   "risco_churn": false,
+   "movimento_semanal": "Não há base de leads ou vendas na semana para calcular movimento de CAC e CPL.",
+   "como_validar": "Após a correção técnica, reativar as campanhas com orçamento mínimo e realizar conversões de teste. Validar em 24 a 48 horas se os eventos de lead estão sendo refletidos corretamente nos painéis do Google e Meta.",
+   "hipotese": "As tags de conversão foram removidas acidentalmente do site, o pixel do Meta está desconfigurado, ou as URLs de destino das campanhas estão direcionando para páginas de erro 404, interrompendo a jornada do usuário."
+  },
+  {
+   "partner": "interplus internet",
+   "status_geral": "sem_base",
+   "eixo_principal": "funil",
+   "canal_critico": "nenhum",
+   "diagnostico": "A conta está sem base estatística para análise de CAC, pois não registrou absolutamente nenhuma venda nos últimos 30 dias. O volume de captação despencou drasticamente, gerando apenas 3 leads no período (todos provenientes do Google). O Meta sofre com abandono total no início do bot (chat_start para zip_search em 0%), enquanto o Google apresenta forte gargalo de cobertura (clickoff para redirect em 22.7%).",
+   "cadeia_causal": "A falha no fluxo do bot do Meta (0% de avanço) somada à baixa viabilidade de CEPs no Google (22.7%) secou o topo do funil. Sem volume de leads qualificados entrando na base, o funil comercial ficou desabastecido, resultando em zero vendas e impossibilitando a leitura do CAC nos últimos 30 dias.",
+   "acao_semana": "Testar exaustivamente o fluxo do bot no WhatsApp do Meta para identificar onde ocorre a quebra. No Google, revisar a segmentação geográfica e expandir o raio de cobertura para áreas com maior viabilidade técnica.",
+   "confianca": "alta",
+   "evidencias_citadas": [
+    {
+     "metrica": "vendas",
+     "valor": "0",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "leads",
+     "valor": "3",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "chat_start>zip_search",
+     "valor": "0.0%",
+     "janela": "30d",
+     "canal": "meta"
+    },
+    {
+     "metrica": "clickoff>redirect",
+     "valor": "22.7%",
+     "janela": "30d",
+     "canal": "google"
+    }
+   ],
+   "risco_churn": false,
+   "movimento_semanal": "Não há base de vendas na semana para calcular CAC, e o volume de leads foi quase nulo.",
+   "como_validar": "Acompanhar as métricas de funil nos próximos 7 dias. O objetivo é ver a taxa de chat_start>zip_search sair de zero no Meta e a taxa de clickoff>redirect no Google superar os 30%, reativando a entrada de leads.",
+   "hipotese": "O bot do WhatsApp está inativo, com erro de resposta automática, ou exigindo informações complexas logo no início. No Google, as campanhas estão impactando regiões onde o provedor não possui viabilidade de instalação."
+  },
+  {
+   "partner": "loga-internet",
+   "status_geral": "ok",
+   "eixo_principal": "saudavel",
+   "canal_critico": "nenhum",
+   "diagnostico": "A conta apresenta excelente saúde, com o CAC de 30 dias consolidado em R$107, bem abaixo do teto ideal. Na última semana, o CPL da conta caiu expressivos 38%, atingindo R$30, movimento liderado pela alta eficiência do Google. Apesar de uma queda na taxa de fechamento de vendas (-9.4pp), o barateamento substancial na captação de leads garantiu que o CAC semanal caísse para R$132, mantendo a rentabilidade.",
+   "cadeia_causal": "A forte queda no custo por clique (CPC) do Google (-37.2%) reduziu o CPL do canal praticamente pela metade (R$30.86). Esse barateamento no topo do funil injetou um volume de leads muito mais baratos na base, o que compensou totalmente a queda na taxa de conversão de lead para venda (-9.4pp) e puxou o CAC para baixo.",
+   "acao_semana": "Manter a estrutura atual de campanhas, que está entregando alto volume com excelente eficiência de custos. Compartilhar os dados de queda no fechamento com o parceiro para alinhar expectativas comerciais.",
+   "confianca": "alta",
+   "evidencias_citadas": [
+    {
+     "metrica": "CAC",
+     "valor": "107.1",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "30.0",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "48.56",
+     "janela": "7d_prev",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CAC",
+     "valor": "132.86",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPC",
+     "valor": "-37.2%",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "30.86",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "lead>venda",
+     "valor": "-9.4pp",
+     "janela": "7d",
+     "canal": "ambos"
+    }
+   ],
+   "risco_churn": false,
+   "movimento_semanal": "O CAC da conta caiu 12% puxado por uma forte redução no CPL do Google, que compensou a queda no fechamento.",
+   "como_validar": "Monitorar o CPL e o CPC do Google nos próximos 7 dias para confirmar se o leilão se estabiliza neste novo patamar favorável. Acompanhar se a taxa de lead para venda retorna à média histórica de 30%.",
+   "hipotese": "A otimização do algoritmo no Google encontrou bolsões de tráfego mais baratos e qualificados, reduzindo o CPC. A queda no fechamento é uma flutuação natural do funil comercial frente ao maior volume de leads."
+  },
+  {
+   "partner": "ativa-telecom",
+   "status_geral": "ok",
+   "eixo_principal": "funil",
+   "canal_critico": "nenhum",
+   "diagnostico": "A conta está saudável com um CAC de 30 dias em R$98, mas a última semana fechou sem nenhuma venda registrada. O CPL do Google está em um patamar excelente (R$31.8), impulsionado por uma queda de 34% no CPC. O principal ponto de atenção é a forte fricção na etapa final do funil em ambos os canais: a taxa de redirect para leads está em apenas 12% no Google e críticos 0.9% no Meta, limitando o volume.",
+   "cadeia_causal": "A redução expressiva no custo por clique do Google (-34.0%) barateou o tráfego e manteve o CPL do canal em um patamar muito baixo (R$31.8). Essa eficiência de custos garantiu a geração de leads na semana, mesmo com a altíssima fricção enfrentada pelos usuários na etapa de redirect para leads em ambas as plataformas.",
+   "acao_semana": "Revisar imediatamente a landing page do Google e o fluxo final do WhatsApp no Meta para identificar e corrigir os atritos que estão derrubando a taxa de redirect para leads. Manter os orçamentos atuais.",
+   "confianca": "alta",
+   "evidencias_citadas": [
+    {
+     "metrica": "CAC",
+     "valor": "98.33",
+     "janela": "30d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "vendas",
+     "valor": "0",
+     "janela": "7d",
+     "canal": "ambos"
+    },
+    {
+     "metrica": "CPL",
+     "valor": "31.8",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "CPC",
+     "valor": "-34.0%",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "redirect>leads",
+     "valor": "12.0%",
+     "janela": "30d",
+     "canal": "google"
+    },
+    {
+     "metrica": "redirect>leads",
+     "valor": "0.9%",
+     "janela": "30d",
+     "canal": "meta"
+    }
+   ],
+   "risco_churn": false,
+   "movimento_semanal": "Não há base de vendas na semana para calcular CAC, mas o CPL do Google caiu com a redução do CPC.",
+   "como_validar": "Acompanhar a taxa de redirect para leads nos próximos 7 dias. O objetivo é que o Google se aproxime da média dos pares (43%) e o Meta saia do patamar de quase zero, destravando o volume de captação.",
+   "hipotese": "O formulário da landing page está longo demais ou apresentando lentidão no carregamento. No Meta, a transição final para o WhatsApp pode estar com link quebrado ou mensagem padrão confusa, gerando abandono."
+  }
+ ],
+ "acoes_priorizadas": [
+  {
+   "ordem": 1,
+   "partner": "unifique",
+   "canal": "ambos",
+   "acao": "Pausar campanhas e auditar rastreamento de conversões e links.",
+   "justificativa": "Conta consumindo verba sem registrar nenhum lead em 30 dias.",
+   "impacto_esperado": "Estancar desperdício de verba e reativar a medição correta para o algoritmo.",
+   "confianca": "alta"
+  },
+  {
+   "ordem": 2,
+   "partner": "direct internet",
+   "canal": "google",
+   "acao": "Revisar oferta na landing page para torná-la mais agressiva.",
+   "justificativa": "Risco de churn ativo com CAC estagnado e gargalo severo em sessões>clickoff.",
+   "impacto_esperado": "Aumentar o engajamento na página e gerar leads mais qualificados para reverter a queda de vendas.",
+   "confianca": "alta"
+  },
+  {
+   "ordem": 3,
+   "partner": "ultranet-network",
+   "canal": "meta",
+   "acao": "Revisar segmentação de CEPs nas campanhas.",
+   "justificativa": "Taxa de zip_search>redirect muito fraca (38.2%), indicando tráfego fora da área de cobertura.",
+   "impacto_esperado": "Reduzir o abandono no bot e melhorar a qualificação dos leads que chegam ao final do fluxo.",
+   "confianca": "alta"
+  },
+  {
+   "ordem": 4,
+   "partner": "the fiber internet",
+   "canal": "meta",
+   "acao": "Investigar e corrigir atritos na etapa de redirect para leads.",
+   "justificativa": "Canal inoperante com taxa de conversão final em apenas 10%, secando a geração de leads.",
+   "impacto_esperado": "Reativar a captação de leads no Meta para diminuir a dependência exclusiva do Google.",
+   "confianca": "alta"
+  },
+  {
+   "ordem": 5,
+   "partner": "enove-fibra",
+   "canal": "ambos",
+   "acao": "Trocar criativos no Meta e simplificar formulário no Google.",
+   "justificativa": "Gargalos em cliques>chat_start no Meta e redirect>leads no Google limitam o volume.",
+   "impacto_esperado": "Destravar o funil em ambos os canais para aproveitar o aumento recente de investimento.",
+   "confianca": "media"
+  },
+  {
+   "ordem": 6,
+   "partner": "interplus internet",
+   "canal": "ambos",
+   "acao": "Testar fluxo do bot no Meta e expandir raio de cobertura no Google.",
+   "justificativa": "Conta sem vendas em 30 dias devido a abandono total no bot e baixa viabilidade de CEPs.",
+   "impacto_esperado": "Restabelecer a entrada de leads qualificados para reabastecer o funil comercial.",
+   "confianca": "alta"
+  },
+  {
+   "ordem": 7,
+   "partner": "ativa-telecom",
+   "canal": "ambos",
+   "acao": "Revisar landing page e fluxo final do WhatsApp.",
+   "justificativa": "Forte fricção na etapa de redirect>leads em ambos os canais está limitando o volume.",
+   "impacto_esperado": "Aumentar a conversão final para transformar o tráfego barato em volume real de leads.",
+   "confianca": "alta"
+  },
+  {
+   "ordem": 8,
+   "partner": "loga-internet",
+   "canal": "ambos",
+   "acao": "Manter estrutura atual e alinhar com comercial sobre fechamento.",
+   "justificativa": "Campanhas performando muito bem, mas taxa de fechamento de vendas caiu na última semana.",
+   "impacto_esperado": "Garantir que o alto volume de leads baratos seja convertido em vendas pelo provedor.",
+   "confianca": "alta"
+  }
+ ]
+}
