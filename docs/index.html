@@ -202,7 +202,7 @@ th.canal-group.meta   { background: #ede9fe; color: #5b21b6; }
 
 <div class="section" id="progressao-section">
   <div class="section-header">
-    <h2>Progressão por Partner<span class="tip">i<span class="tip-content"><strong>Aparece quando você seleciona um partner específico</strong>, no seletor desta seção ou no filtro do topo (os dois ficam sincronizados).<br><br>Linhas = métricas-chave. Colunas = períodos.<br>Toggle <strong>Mensal</strong> (fev/26 a jun/26) ou <strong>Semanal</strong> (últimas 12 semanas).<br><br><strong>Métricas mostradas:</strong><ul><li>Investimento bruto / cashback / líquido / %Cashback</li><li>Cliques Google + Meta</li><li>Clickoff (Google) e Chat start (Meta)</li><li>Leads e Vendas</li><li>CPL líq. e CAC líq.</li><li><strong>%Assertividade Google</strong> = Leads Google / Clickoff Google</li><li><strong>%Assertividade Meta</strong> = Leads Meta / Chat start Meta</li><li>Lead → Venda</li></ul>Os dados são extraídos das mesmas fontes das outras seções (consistente com filtros aplicados).</span></span></h2>
+    <h2>Progressão por Partner<span class="tip">i<span class="tip-content"><strong>Aparece quando você seleciona um partner específico</strong>, no seletor desta seção ou no filtro do topo (os dois ficam sincronizados).<br><br>Linhas = métricas-chave. Colunas = períodos.<br>Toggle <strong>Mensal</strong> (últimos 6 meses, incluindo o mês corrente ainda em andamento) ou <strong>Semanal</strong> (últimas 12 semanas).<br><br><strong>Métricas mostradas:</strong><ul><li>Investimento bruto / cashback / líquido / %Cashback</li><li>Cliques Google + Meta</li><li>Clickoff (Google) e Chat start (Meta)</li><li>Leads e Vendas</li><li>CPL líq. e CAC líq.</li><li><strong>%Assertividade Google</strong> = Leads Google / Clickoff Google</li><li><strong>%Assertividade Meta</strong> = Leads Meta / Chat start Meta</li><li>Lead → Venda</li></ul>Os dados são extraídos das mesmas fontes das outras seções (consistente com filtros aplicados).</span></span></h2>
     <div style="display:flex;align-items:center;gap:10px;">
       <div class="partner-multiselect" id="partner-multiselect-progressao">
         <button type="button" class="partner-ms-toggle" id="partner-ms-toggle-progressao" data-active="false">Todos ▾</button>
@@ -1021,12 +1021,13 @@ function render() {
 function buildMonthlyForPartner(id_mp) {
   // Meses detectados dinamicamente (igual buildTaxasMonthly) — antes era uma lista fixa
   // que parava em jun/26 e nunca incluía os meses seguintes sem editar o código.
-  const currMonth = SNAPSHOT_ISO.slice(0, 7);
+  // Inclui o mês corrente (parcial) de propósito — Pedro prefere ver o mês em
+  // andamento nessas duas tabelas em vez de esperar ele fechar (2026-07-28).
   const isMonthKey = (k) => /^\d{4}-\d{2}$/.test(k);
   const monthKeys = new Set();
-  for (const r of SNAPSHOT)       if (isMonthKey(r.period_key) && r.period_key !== currMonth) monthKeys.add(r.period_key);
-  for (const r of FUNNEL_GOOGLE)  if (isMonthKey(r.p_key)      && r.p_key      !== currMonth) monthKeys.add(r.p_key);
-  for (const r of FUNNEL_META)    if (isMonthKey(r.p_key)      && r.p_key      !== currMonth) monthKeys.add(r.p_key);
+  for (const r of SNAPSHOT)       if (isMonthKey(r.period_key)) monthKeys.add(r.period_key);
+  for (const r of FUNNEL_GOOGLE)  if (isMonthKey(r.p_key))      monthKeys.add(r.p_key);
+  for (const r of FUNNEL_META)    if (isMonthKey(r.p_key))      monthKeys.add(r.p_key);
   const months = Array.from(monthKeys).sort().slice(-6);
   return months.map(m => {
     const sG = SNAPSHOT.find(s => s.period_key === m && s.id_mp === id_mp && s.canal === 'google');
@@ -1163,12 +1164,10 @@ function buildTaxasWeekly(id_mp) {
 function buildTaxasMonthly(id_mp) {
   const idx = DS_PARTNERS.indexOf(id_mp);
   if (idx < 0) return [];
-  const currMonth = SNAPSHOT_ISO.slice(0, 7);
   const buckets = new Map();
   for (const r of DAILY_FUNNEL) {
     if (r[1] !== idx) continue;
     const ym = r[0].slice(0, 7);
-    if (ym === currMonth) continue; // esconde mês corrente (parcial)
     let b = buckets.get(ym);
     if (!b) {
       b = { key: ym, cliques_g:0, sessoes_g:0, clickoff_g:0, redirect_g:0, leads_g:0, vendas_g:0,
