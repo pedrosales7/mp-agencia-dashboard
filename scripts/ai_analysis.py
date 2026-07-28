@@ -452,19 +452,31 @@ def build_payload(all_daily, all_dfg, all_dfm, cutoff_dt, valid_partners):
     # dias_de_dados: do primeiro dia com investimento BRUTO > 0 até o corte.
     # Satura na poda de 180 dias do all_daily — só importa pro teste de ramp (<14),
     # onde a poda nunca alcança.
+    #
+    # dias_desde_ultimo_investimento: do ÚLTIMO dia com investimento BRUTO > 0
+    # até o corte (2026-07-28, achado real: Unifique). Sem isso, uma conta que
+    # parou de rodar há semanas ainda aparece com investimento_liquido > 0 na
+    # janela móvel de 30d enquanto o último dia de gasto real estiver dentro
+    # dela — e a triagem confundia isso com "dado_suspeito" (investimento
+    # contínuo sem lead, rastreamento quebrado), quando o problema real é outro:
+    # a campanha simplesmente parou de existir/sincronizar. Ver _escada().
     dias_de_dados = {}
+    dias_desde_ultimo_investimento = {}
     for p in valid_partners:
         dias_ativos = [r["dia"] for r in all_daily
                        if r["id_mp"] == p and (r.get("bruto") or 0) > 0
                        and r["dia"] <= cutoff_dt.isoformat()]
         dias_de_dados[p] = ((cutoff_dt - date.fromisoformat(min(dias_ativos))).days + 1
                             if dias_ativos else 0)
+        dias_desde_ultimo_investimento[p] = ((cutoff_dt - date.fromisoformat(max(dias_ativos))).days
+                                             if dias_ativos else None)
 
     return {
         "data_corte": cutoff_dt.isoformat(),
         "janelas": {k: {"inicio": v[0], "fim": v[1]} for k, v in windows.items()},
         "partners": valid_partners,
         "dias_de_dados_por_partner": dias_de_dados,
+        "dias_desde_ultimo_investimento_por_partner": dias_desde_ultimo_investimento,
         "kpis_por_partner_canal_janela": invest,
         "funil_google_por_partner": funil_google,
         "funil_meta_por_partner": funil_meta,
@@ -663,9 +675,12 @@ META = {
     "MIN_VENDAS": 3,      # base mínima pro CAC ter significado (decisão 2026-07-24)
     "MIN_LEADS": 10,      # base mínima pro CPL
     "RAMP_DIAS": 14,
+    "PAUSA_DIAS": 10,     # achado real 2026-07-28 (Unifique): sem investimento novo há
+                          # mais que isso, o valor em 30d é resíduo da janela móvel, não
+                          # gasto contínuo — vira "pausada", não "dado_suspeito"
 }
 
-SEV = {"alarme": 0, "atencao": 1, "dado_suspeito": 2, "sem_base": 3, "ramp": 4, "ok": 5}
+SEV = {"alarme": 0, "atencao": 1, "dado_suspeito": 2, "pausada": 3, "sem_base": 4, "ramp": 5, "ok": 6}
 
 
 def _gargalo_relevante(g):
@@ -681,13 +696,19 @@ def _gargalo_relevante(g):
                for d in (g.get("desvio_vs_pares_pct"), g.get("delta_vs_historico_pct")))
 
 
-def _escada(liq, leads, vendas, cac, cpl, leads_7d, dias):
+def _escada(liq, leads, vendas, cac, cpl, leads_7d, dias, dias_desde_ultimo_investimento):
     """A escada de julgamento: para no primeiro degrau que o dado sustenta."""
     if not liq and not leads:
         return "sem_base", "sem investimento nem lead em 30d", "nenhuma"
     if dias < META["RAMP_DIAS"]:
         return "ramp", f"conta com {dias} dias de dados (ramp de {META['RAMP_DIAS']})", "ramp"
     if liq > 0 and not leads and not leads_7d:
+        if (dias_desde_ultimo_investimento is not None
+                and dias_desde_ultimo_investimento > META["PAUSA_DIAS"]):
+            return ("pausada",
+                    f"sem investimento novo há {dias_desde_ultimo_investimento} dias — o "
+                    f"valor em 30d é resíduo da janela móvel, a campanha não está mais rodando",
+                    "nenhuma")
         return "dado_suspeito", "investimento em 30d sem nenhum lead em 7d e 30d", "nenhuma"
     if vendas >= META["MIN_VENDAS"] and cac is not None:
         if cac <= META["CAC_IDEAL"]:
@@ -727,11 +748,13 @@ def triar(payload):
     tend = payload.get("tendencia_semanal_por_partner", {})
     garg = payload.get("gargalo_funil_30d", {})
     dias_map = payload.get("dias_de_dados_por_partner", {})
+    ultimo_invest_map = payload.get("dias_desde_ultimo_investimento_por_partner", {})
     partners = payload.get("partners") or list(kpis)
     out = {}
 
     for p in partners:
         dias = dias_map.get(p, 0)
+        dias_ultimo_invest = ultimo_invest_map.get(p)
         niveis = {}
         for nivel in ("conta", "google", "meta"):
             w = kpis.get(p, {}).get(nivel, {})
@@ -740,7 +763,7 @@ def triar(payload):
             leads, vendas = j30.get("leads") or 0, j30.get("vendas") or 0
             cac, cpl = j30.get("cac"), j30.get("cpl")
             status, motivo, base = _escada(liq, leads, vendas, cac, cpl,
-                                           j7.get("leads") or 0, dias)
+                                           j7.get("leads") or 0, dias, dias_ultimo_invest)
             niveis[nivel] = {
                 "status": status, "motivo": motivo, "base_de_julgamento": base,
                 "cac_30d": cac, "cpl_30d": cpl,
@@ -795,7 +818,8 @@ def triar(payload):
 
 
 TRIAGEM_LABEL = {"ok": "OK", "atencao": "Atenção", "alarme": "Alarme",
-                 "sem_base": "Sem base", "dado_suspeito": "Dado suspeito", "ramp": "Ramp"}
+                 "sem_base": "Sem base", "dado_suspeito": "Dado suspeito", "ramp": "Ramp",
+                 "pausada": "Pausada"}
 
 
 def render_triagem_html(triagem):
@@ -959,8 +983,15 @@ Padrões por etapa:
   suficiente nas duas janelas, o resultado não fechou direção: diga isso e
   proponha acompanhar. Divergência entre métricas diferentes não autoriza essa
   saída.
-- status "dado_suspeito" -> não diagnostique performance. A ação é verificar
-  rastreamento.
+- status "dado_suspeito" -> investimento CONTÍNUO sem nenhum lead: não
+  diagnostique performance, a ação é verificar rastreamento (pixel/tags/link).
+- status "pausada" -> a conta NÃO tem investimento novo há mais de 10 dias; o
+  valor que aparece em 30d é resíduo da janela móvel (o gasto real aconteceu
+  há semanas e ainda cabe na janela). Isto é DIFERENTE de "dado_suspeito": não
+  é rastreamento quebrado, é a campanha ter parado de rodar/sincronizar. Não
+  diagnostique performance nem recomende auditoria de tracking — diga que a
+  conta está pausada há quantos dias e, se fizer sentido reativar, o que
+  checar antes (orçamento, config da campanha).
 - status "ramp" -> diga só que a conta está em ramp e o que observar quando
   fechar 14 dias de dados.
 - risco_churn true na triagem -> o diagnóstico tem que endereçar isso
@@ -1019,7 +1050,7 @@ STAGE1_SCHEMA = {
                     "partner": {"type": "string"},
                     "status_geral": {"type": "string",
                                      "enum": ["ok", "atencao", "alarme", "sem_base",
-                                              "dado_suspeito", "ramp"]},
+                                              "dado_suspeito", "ramp", "pausada"]},
                     "eixo_principal": {"type": "string",
                                        "enum": ["cac", "cpl", "funil", "pre_clique", "cobertura",
                                                 "rastreamento", "ramp", "saudavel"]},
@@ -1251,9 +1282,11 @@ SEM NENHUM EMOJI (nem no texto, nem como marcador de bullet).
 SÓ os pontos críticos — pra quem vai ler batendo o olho no celular. NÃO
 mencione contas saudáveis, estáveis ou "indo bem": se o status_geral do
 partner na triagem é "ok", ele não entra aqui, nem como contraste positivo.
+Conta "pausada" (sem investimento novo, resíduo da janela móvel) também NÃO
+entra — não é ponto crítico, é conta parada, nada a fazer esta semana.
 1 bullet com a leitura crítica da semana — a conclusão, não os números.
-2 a 3 bullets com os diagnósticos mais graves (alarme/atenção/risco de churn),
-cada um com o motivo em poucas palavras.
+2 a 3 bullets com os diagnósticos mais graves (alarme/atenção/dado_suspeito/
+risco de churn), cada um com o motivo em poucas palavras.
 1 bullet com a ação nº 1.
 Se NENHUMA conta estiver em alarme ou atenção, diga isso em 1 frase curta e
 pare — não force um problema que não existe.
@@ -1557,17 +1590,24 @@ def run(context, cutoff_dt, repo_root):
 def render_cac_slack(payload):
     """CAC 30d por partner ATIVO, separado por canal — pro bloco de thread do Slack.
 
-    Ativo = teve investimento líquido ou lead em 30d na conta (nível agregado);
-    sem isso o partner nem aparece na lista em vez de mostrar tudo "—".
+    Ativo = teve investimento líquido ou lead em 30d na conta (nível agregado)
+    E não está com status "pausada" na triagem — achado real 2026-07-28
+    (Unifique): sem esse segundo filtro, um partner sem campanha rodando há
+    semanas ainda aparece aqui com um resíduo de investimento_liquido > 0
+    (a janela móvel de 30d ainda toca o último dia de gasto real), mostrando
+    uma linha só de traços que não ajuda ninguém.
     """
     kpis = payload.get("kpis_por_partner_canal_janela", {})
     partners = payload.get("partners") or list(kpis)
+    triagem = payload.get("triagem", {}).get("por_partner", {})
 
     def fmt(v):
         return f"R${v:.0f}" if v is not None else "—"
 
     linhas = []
     for p in partners:
+        if triagem.get(p, {}).get("status_geral") == "pausada":
+            continue
         w = kpis.get(p, {})
         conta = w.get("conta", {}).get("30d", {})
         if not (conta.get("investimento_liquido") or conta.get("leads")):
