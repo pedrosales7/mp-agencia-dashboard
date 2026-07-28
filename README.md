@@ -85,27 +85,34 @@ Rodam em sequência (não paralelo) no Metabase, `database_id=69` (Redshift prod
 
 ## 5. Análise IA semanal (`scripts/ai_analysis.py`)
 
-Camada opcional adicionada em 2026-07-09, roda dentro do mesmo job de refresh. Monta um payload compacto de KPIs (investimento/leads/vendas/CPL/CAC por partner × canal × janela 7d/7d_prev/30d/30d_prev/mês, etapas de funil, série semanal de 8 semanas, benchmarks pré-clique) e pede a um LLM diagnóstico + 3–6 recomendações de mídia por partner.
+Pipeline de **3 estágios**, portado 1:1 (mesmos processamentos, prompts e estrutura) da versão Streamlit do dashboard em 2026-07-28 — só a saída final é diferente (aqui vira HTML publicado + Slack, lá vira JSON lido por um app). Roda dentro do mesmo job de refresh:
 
-**Saída:** `docs/analise.html` (publicado no Pages) + resumo executivo anexado à mensagem semanal do Slack.
+- **Estágio 0 — triagem:** Python puro. Monta o payload de KPIs (investimento/leads/vendas/CPL/CAC por partner × canal × janela, etapas de funil, série semanal de 8 semanas, tendências, benchmarks pré-clique, comparativo semana-vs-semana com decomposição de driver) e aplica os limiares fixos de CAC/CPL — não é julgamento de modelo.
+- **Estágio 1 — diagnóstico:** Gemini com `responseSchema` (JSON estruturado, thinking alto). Recebe o payload inteiro + o diagnóstico da semana anterior (`data/diagnosticos/AAAA-MM-DD.json`) e produz o parecer estruturado por partner, com toda evidência numérica citada declarada em `evidencias_citadas`.
+- **Estágio 2 — redação:** Gemini com tags XML (thinking baixo). Recebe só o JSON do estágio 1 (nunca o payload bruto) — sem números crus na mão, recitar o dashboard fica impossível. Produz pareceres, recomendações, leitura de portfólio e resumo do Slack.
 
-**Agnóstico de provedor** — variables/secrets do repo:
+Uma **validação em código** roda depois de cada estágio: rejeita (fatal) partner ausente, status reclassificado pelo modelo ou ação de confiança baixa promovida a prioritária; avisa (não bloqueia) sobre poucas evidências, hipótese ausente ou número citado na prosa que não está em `evidencias_citadas` — essa última é o check que mata a classe de erro "o modelo inventou um número".
+
+**Saída:** `docs/analise.html` (publicado no Pages, montado a partir dos 4 blocos do estágio 2 + a tabela de triagem) + resumo crítico anexado à mensagem semanal do Slack + bloco de **CAC 30d por parceiro ativo (Google/Meta/Conta)** postado na thread da mensagem principal (via bot token, `SLACK_BOT_TOKEN`/`SLACK_CHANNEL_ID` — cai pro Incoming Webhook sem thread se não configurados).
+
+O JSON do estágio 1 é persistido em `data/diagnosticos/` (commitado pelo workflow) — é a entrada do estágio 2 da semana seguinte (bloco "recomendei X, a conta respondeu?") e o registro histórico auditável.
+
+**Gemini-only** (não é mais agnóstico de provedor) — `responseSchema`/`thinkingConfig` são recursos específicos da API Gemini, e o pipeline de 3 estágios não existe sem eles:
 - `LLM_API_KEY` (secret) — sem ela, o passo é **pulado silenciosamente** e o refresh roda normal (falha da análise nunca derruba o refresh)
-- `LLM_PROVIDER` (variable) — `gemini` (default, AI Studio free/paid tier) | `openai` | `anthropic`
-- `LLM_MODEL` (variable, opcional) — default por provedor no código; **cuidado:** uma variable esquecida sobrescreve o default do código sem aviso (já causou incidente — checar `gh variable list` antes de trocar modelo default no código)
+- `LLM_MODEL` (variable, opcional) — default `gemini-3.1-pro-preview` no código; **cuidado:** uma variable esquecida sobrescreve o default do código sem aviso (já causou incidente — checar `gh variable list` antes de trocar modelo default no código)
 
-**Modelo em produção (desde 2026-07-16):** `gemini-3.1-pro-preview` via Google AI Studio (não Vertex AI — os dois usam endpoints/autenticação diferentes, não são intercambiáveis sem mudar `call_llm()`).
+**Modelo em produção:** `gemini-3.1-pro-preview` via Google AI Studio (não Vertex AI — os dois usam endpoints/autenticação diferentes).
 
-**Regras de estilo do prompt (`PROMPT_TEMPLATE`), calibradas por feedback direto do Pedro:**
+**Regras de estilo dos prompts (`PROMPT_E1`/`PROMPT_E2`), herdadas da versão Streamlit + ajustes deste repo:**
 - **Proibido** ser genérico/recitar números que já aparecem no dashboard — exige diagnóstico qualitativo, hipótese de causa raiz e posição sobre o que fazer, tom de consultor
-- Analisar **todos os 8 partners** por canal, nunca omitir um partner mesmo estável
-- Comparações: 7d vs 7d_prev (topo de funil) e 30d vs 30d_prev (eficiência)
-- Recomendações só com confiança média/alta, rotuladas
-- Estilo **caveman lite**: parecer por partner em 3–5 frases (limite duro), sem preâmbulo
+- Analisar **todos os 8 partners**, nunca omitir um partner mesmo estável — mas o **resumo do Slack** cita só contas em alarme/atenção/risco de churn (decisão deste repo, 2026-07-28: pra Slack, só o crítico)
+- Comparações: 7d vs 7d_prev (topo de funil) e 30d vs 30d_prev (eficiência), nunca CAC/CPL em 7d (lag de fechamento de venda)
+- Recomendações priorizadas só com confiança média/alta
+- **Sem emoji em nenhum bloco** (decisão deste repo, 2026-07-28) — instrução no prompt + sanitização por código (`_strip_emoji`), porque o modelo ignora a instrução sozinha de vez em quando
 - Checar `gargalo_funil_30d` e tendência de 8 semanas **antes** de cashback/CTR (lição: o modelo só usa o que vem pré-calculado no payload em Python — instrução sozinha no prompt não basta, "salência no dado > instrução no prompt")
 - Crédito/runway **fora de escopo** (há alertas dedicados em outro lugar)
 
-Se as regras de negócio do dashboard mudarem (seção 2), atualizar também o `PROMPT_TEMPLATE` em `ai_analysis.py` — não é derivado automaticamente.
+Se as regras de negócio do dashboard mudarem (seção 2), atualizar também `PROMPT_E1`/`PROMPT_E2` em `ai_analysis.py` — não é derivado automaticamente.
 
 ## 6. Stack e conectores
 
@@ -114,13 +121,13 @@ Se as regras de negócio do dashboard mudarem (seção 2), atualizar também o `
 | Runtime do refresh | Python 3.12, `requests` (sem framework) |
 | Dashboard | HTML/CSS/JS estático, self-contained (sem build step) |
 | Dados | Metabase (`database_id=69`) → Redshift prod, via API HTTP direta (`/api/session` + `/api/dataset`) |
-| Análise IA | Gemini (AI Studio) por padrão; agnóstico via `LLM_PROVIDER`/`LLM_MODEL` |
+| Análise IA | Gemini (AI Studio), pipeline de 3 estágios — ver seção 5 |
 | Automação | GitHub Actions (2 workflows: refresh + watchdog) |
 | Publicação | GitHub Pages (branch `main`, pasta `docs/`) |
-| Notificação | Slack Incoming Webhook, app **"Bot MP Agência"**, canal `#mp-agencia-logs-e-avisos` (`C0BEATJ7VFB`) |
+| Notificação | Slack — Incoming Webhook (app **"Bot MP Agência"**, canal `#mp-agencia-logs-e-avisos`, `C0BEATJ7VFB`) para a mensagem principal; bot token (`chat.postMessage`) para a thread do CAC 30d quando configurado |
 
-**Secrets do repo:** `METABASE_URL`, `METABASE_USERNAME`, `METABASE_PASSWORD`, `SLACK_WEBHOOK_URL`, `SLACK_WEBHOOK_URL_TEST`, `LLM_API_KEY`
-**Variables do repo:** `PAGES_URL`, `LLM_PROVIDER`, `LLM_MODEL`
+**Secrets do repo:** `METABASE_URL`, `METABASE_USERNAME`, `METABASE_PASSWORD`, `SLACK_WEBHOOK_URL`, `SLACK_WEBHOOK_URL_TEST`, `SLACK_BOT_TOKEN`, `LLM_API_KEY`
+**Variables do repo:** `PAGES_URL`, `SLACK_CHANNEL_ID`, `LLM_MODEL`
 
 Google Drive **não é mais usado** — upload manual era o gargalo que motivou a migração para GitHub Actions.
 

@@ -1,19 +1,36 @@
 #!/usr/bin/env python3
-"""
-Análise IA semanal do funil MP Agência — camada opcional do weekly_refresh.
+"""Análise IA semanal — pipeline de 3 estágios.
 
-Lê os mesmos dados já carregados pelo refresh (séries diárias, funis, semanais,
-crédito), monta um payload compacto de KPIs e pede a um LLM um diagnóstico
-ponta-a-ponta + recomendações de mídia. Saída: resumo pro Slack + relatório
-HTML publicado no GitHub Pages (docs/analise.html).
+Porte 1:1 do pipeline criado originalmente na versão Streamlit do dashboard
+(`mp-agencia-dashboard-streamlit/scripts/ai_analysis.py`, 2026-07) — mesmos
+processamentos, mesmos prompts, mesma estrutura de 3 estágios. Adaptado só na
+saída: aqui não existe app Streamlit lendo JSON, então o resultado vira HTML
+publicado (`docs/analise.html`) + mensagem/thread do Slack, via `render_page()`
+e `render_cac_slack()` no fim deste arquivo (que não existem na versão
+original). Roda dentro do weekly_refresh (GitHub Actions, terça), nunca em
+runtime — é a mesma keep-out-of-request-path da versão Streamlit.
 
-Agnóstico de provedor — controlado por env vars (secrets/variables do repo):
-  LLM_API_KEY   (secret)  — obrigatório; sem ele a análise é pulada em silêncio.
-  LLM_PROVIDER  (variable) — gemini (default) | openai | anthropic.
-  LLM_MODEL     (variable) — opcional, sobrescreve o default do provedor.
+  Estágio 0 — triagem      · Python puro. Limiares são numéricos e absolutos;
+                             comparar número com limiar é o que LLM faz pior.
+  Estágio 1 — diagnóstico  · LLM com responseSchema. Julgamento estruturado.
+  Estágio 2 — redação      · LLM com tags XML. Recebe SÓ o JSON do estágio 1,
+                             nunca o payload — sem números crus na mão, recitar
+                             o dashboard fica impossível.
 
-Defaults pensados pro menor custo: Gemini via Google AI Studio tem tier
-gratuito que cobre folgado 1 chamada/semana.
+O JSON do estágio 1 é persistido em data/diagnosticos/AAAA-MM-DD.json (commitado
+pelo workflow, ver weekly-refresh.yml): é a entrada do estágio 2 da semana
+seguinte (bloco "recomendei X, não mexeu") e o registro histórico auditável.
+
+Config por env var (secrets do repo):
+  LLM_API_KEY  — sem ela a análise é pulada em silêncio, o refresh segue.
+  LLM_MODEL    — opcional, default gemini-3.1-pro-preview.
+
+Nota: esta versão é Gemini-only (usa responseSchema + thinkingConfig, recursos
+específicos da API Gemini) — a versão anterior deste arquivo era agnóstica de
+provedor (LLM_PROVIDER gemini|openai|anthropic). Decisão consciente ao portar:
+Pedro já fixou Gemini AI Studio pago como provedor (ver memória
+mp-dashboard-ai-analysis), e o pipeline de 3 estágios não existe sem
+responseSchema.
 """
 import json
 import os
@@ -25,17 +42,17 @@ from statistics import median
 
 import requests
 
-DEFAULT_MODELS = {
-    "gemini": "gemini-3.1-pro-preview",
-    "openai": "gpt-4o-mini",
-    "anthropic": "claude-haiku-4-5-20251001",
-}
-
+DEFAULT_MODEL = "gemini-3.1-pro-preview"
 REQUEST_TIMEOUT = 300
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
 
 def enabled():
     return bool(os.environ.get("LLM_API_KEY"))
+
+
+def _model():
+    return (os.environ.get("LLM_MODEL") or "").strip() or DEFAULT_MODEL
 
 
 # ── payload ───────────────────────────────────────────────────────────────
@@ -91,13 +108,21 @@ def weekly_series(all_daily, all_dfg, all_dfm, cutoff_dt, valid_partners, n_week
                 k = (r["id_mp"], canal, _week_start(r["dia"]))
                 for f in ("liquido", "leads", "vendas"):
                     agg[k][f] += r.get(f) or 0
+    # etapas do funil também entram na série: sem elas não dá pra dizer QUAL etapa
+    # moveu o CAC de uma semana pra outra, que é o "isso aconteceu porque a taxa de
+    # redirect>lead melhorou" que o time de mídia pediu.
     for rows, canal in ((all_dfg, "google"), (all_dfm, "meta")):
+        campos = ("cliques", "impressoes") + STAGE_COLS[canal]
         for r in rows:
             if r["id_mp"] in valid_partners and ini <= r["dia"] <= fim:
                 for c in (canal, "total"):
                     k = (r["id_mp"], c, _week_start(r["dia"]))
-                    for f in ("cliques", "impressoes"):
+                    for f in campos:
                         agg[k][f] += r.get(f) or 0
+                    # atribuição do funil (por campanha/chat) é diferente da do
+                    # snapshot (por partner_id_partner). A taxa redirect>leads
+                    # tem que usar a MESMA base do redirect, senão passa de 100%.
+                    agg[k]["leads_funil"] += r.get("leads") or 0
 
     out = {}
     for p in valid_partners:
@@ -108,16 +133,42 @@ def weekly_series(all_daily, all_dfg, all_dfm, cutoff_dt, valid_partners, n_week
                 liq = round(v.get("liquido", 0))
                 leads, vendas = int(v.get("leads", 0)), int(v.get("vendas", 0))
                 cliques, impr = int(v.get("cliques", 0)), int(v.get("impressoes", 0))
-                serie.append({
+                sem = {
                     "ws": ws, "liquido": liq, "leads": leads, "vendas": vendas,
                     "cliques": cliques, "impressoes": impr,
                     "cpl": _ratio(liq, leads), "cac": _ratio(liq, vendas),
                     "ctr_pct": round(100 * cliques / impr, 2) if impr else None,
-                })
+                    "cpc": _ratio(liq, cliques),
+                }
+                sem["leads_funil"] = int(v.get("leads_funil", 0))
+                if canal in STAGE_DEFS_WEEK:
+                    for de, para in STAGE_DEFS_WEEK[canal]:
+                        d_val = cliques if de == "cliques" else int(v.get(de, 0))
+                        p_val = (sem["leads_funil"] if para == "leads"
+                                 else int(v.get(para, 0)))
+                        sem[f"taxa_{de}>{para}"] = (round(100 * p_val / d_val, 1)
+                                                    if d_val else None)
+                sem["taxa_lead_venda"] = round(100 * vendas / leads, 1) if leads else None
+                serie.append(sem)
             if any(s["liquido"] or s["leads"] or s["cliques"] for s in serie):
                 out.setdefault(p, {})[canal] = serie
     return out
 
+
+# Só as etapas que existem APENAS no funil. `leads`/`vendas` NÃO entram aqui:
+# já vêm do DAILY_SNAPSHOT e somar de novo dobrava o número (bug pego em
+# 2026-07-27 — a taxa redirect>leads dava 259%, e as vendas semanais da Ultranet
+# apareciam como 8 quando eram 4).
+STAGE_COLS = {
+    "google": ("sessoes", "clickoff", "redirect"),
+    "meta": ("chat_start", "zip_search", "redirect"),
+}
+STAGE_DEFS_WEEK = {
+    "google": (("cliques", "sessoes"), ("sessoes", "clickoff"),
+               ("clickoff", "redirect"), ("redirect", "leads")),
+    "meta": (("cliques", "chat_start"), ("chat_start", "zip_search"),
+             ("zip_search", "redirect"), ("redirect", "leads")),
+}
 
 TREND_FIELDS = ("leads", "vendas", "cpl", "cac", "cliques", "ctr_pct")
 
@@ -419,8 +470,181 @@ def build_payload(all_daily, all_dfg, all_dfm, cutoff_dt, valid_partners):
         "funil_meta_por_partner": funil_meta,
         "serie_semanal_por_partner": semanal,
         "tendencia_semanal_por_partner": tendencia_semanal,
+        "comparativo_semana_vs_semana": comparativo_semanal(series),
         "benchmark_pre_clique_30d": benchmark,
         "gargalo_funil_30d": gargalo_funil,
+    }
+
+
+
+# ── comparativo semana vs semana ──────────────────────────────────────────
+#
+# Pedido direto do time de mídia (2026-07-27): "o CAC cresceu X% e quem mais
+# contribuiu foi A, B e C" e, por provedor, "caiu em qual canal e por causa de
+# quê". Tudo calculado aqui — é aritmética de decomposição, exatamente o que o
+# modelo não pode fazer sem inventar número.
+#
+# Trava de base: com 1 venda/semana o CAC semanal de uma conta pequena vira
+# ruído (uma venda a mais move 100%). Abaixo do mínimo o campo sai com
+# base_suficiente=False e o prompt proíbe narrar a variação.
+
+MIN_VENDAS_SEMANA = 3
+MIN_LEADS_SEMANA = 10
+
+
+def _delta_pct(atual, anterior, exige_positivo=False):
+    """Variação relativa. `exige_positivo` para métricas de custo.
+
+    Líquido = bruto − cashback pode ficar NEGATIVO quando o cashback supera o
+    bruto (Ativa Telecom, 97% de cashback). Aí CPC/CPL/CAC ficam negativos e a
+    variação percentual vira número sem sentido — deu "cpc -201%" no teste.
+    """
+    if atual is None or anterior is None or not anterior:
+        return None
+    if exige_positivo and (atual <= 0 or anterior <= 0):
+        return None
+    return round(100 * (atual - anterior) / abs(anterior), 1)
+
+
+def _delta_pp(atual, anterior):
+    if atual is None or anterior is None:
+        return None
+    return round(atual - anterior, 1)
+
+
+MIN_DENOM_ETAPA = 10   # abaixo disso a taxa da etapa oscila por 1-2 eventos
+
+
+def _denom_etapa(sem, de):
+    return sem.get("cliques", 0) if de == "cliques" else int(sem.get(de) or 0)
+
+
+def _driver(sem, prev, canal):
+    """Qual alavanca mais se moveu: etapa do funil, CPC ou volume de investimento.
+
+    Etapas são comparadas entre si em pontos percentuais (mesma unidade); CPC e
+    investimento entram como candidatos separados, em variação relativa. O campo
+    `principal` aponta a maior movimentação com base, e é o que o parecer deve
+    citar como causa.
+    """
+    etapas = {}
+    for de, para in STAGE_DEFS_WEEK.get(canal, ()):
+        # sem base no denominador nas DUAS semanas a taxa vira ruído: com 3
+        # cliques, um evento a mais move 33pp e o parecer narra isso como causa
+        if min(_denom_etapa(sem, de), _denom_etapa(prev, de)) < MIN_DENOM_ETAPA:
+            continue
+        d = _delta_pp(sem.get(f"taxa_{de}>{para}"), prev.get(f"taxa_{de}>{para}"))
+        if d is not None:
+            etapas[f"{de}>{para}"] = d
+    if min(sem.get("leads", 0), prev.get("leads", 0)) >= MIN_DENOM_ETAPA:
+        lv = _delta_pp(sem.get("taxa_lead_venda"), prev.get("taxa_lead_venda"))
+        if lv is not None:
+            etapas["lead>venda"] = lv
+
+    out = {
+        "etapas_delta_pp": etapas,
+        "cpc_delta_pct": _delta_pct(sem.get("cpc"), prev.get("cpc"), exige_positivo=True),
+        "investimento_delta_pct": _delta_pct(sem.get("liquido"), prev.get("liquido"),
+                                             exige_positivo=True),
+        "cliques_delta_pct": _delta_pct(sem.get("cliques"), prev.get("cliques")),
+    }
+    if etapas:
+        nome, valor = max(etapas.items(), key=lambda kv: abs(kv[1]))
+        # etapa só vira "a causa" se moveu de verdade; senão o driver é custo/volume
+        if abs(valor) >= 3.0:
+            out["principal"] = {"tipo": "taxa_de_conversao", "onde": nome, "delta_pp": valor}
+            return out
+    cands = [("cpc", out["cpc_delta_pct"]), ("investimento", out["investimento_delta_pct"])]
+    cands = [(n, v) for n, v in cands if v is not None and abs(v) >= 10]
+    if cands:
+        nome, valor = max(cands, key=lambda kv: abs(kv[1]))
+        out["principal"] = {"tipo": nome, "onde": nome, "delta_pct": valor}
+    else:
+        out["principal"] = None
+    return out
+
+
+def _bloco_semana(sem, prev, canal):
+    vendas, vendas_prev = sem["vendas"], prev["vendas"]
+    leads, leads_prev = sem["leads"], prev["leads"]
+    base_cac = vendas >= MIN_VENDAS_SEMANA and vendas_prev >= MIN_VENDAS_SEMANA
+    base_cpl = leads >= MIN_LEADS_SEMANA and leads_prev >= MIN_LEADS_SEMANA
+    return {
+        "liquido": sem["liquido"], "liquido_anterior": prev["liquido"],
+        "leads": leads, "leads_anterior": leads_prev,
+        "vendas": vendas, "vendas_anterior": vendas_prev,
+        "cac": sem["cac"], "cac_anterior": prev["cac"],
+        "cac_delta_pct": _delta_pct(sem["cac"], prev["cac"], exige_positivo=True) if base_cac else None,
+        "cac_base_suficiente": base_cac,
+        "cpl": sem["cpl"], "cpl_anterior": prev["cpl"],
+        "cpl_delta_pct": _delta_pct(sem["cpl"], prev["cpl"], exige_positivo=True) if base_cpl else None,
+        "cpl_base_suficiente": base_cpl,
+        "motivo_sem_base": None if base_cac else
+            f"{vendas} venda(s) nesta semana e {vendas_prev} na anterior — "
+            f"abaixo do mínimo de {MIN_VENDAS_SEMANA} para ler CAC semanal",
+        "driver": _driver(sem, prev, canal),
+    }
+
+
+def comparativo_semanal(series):
+    """Última semana completa vs. a anterior, no portfólio e por partner×canal."""
+    partners = [p for p, c in series.items() if "total" in c and len(c["total"]) >= 2]
+    if not partners:
+        return None
+
+    ws = series[partners[0]]["total"][-1]["ws"]
+    ws_prev = series[partners[0]]["total"][-2]["ws"]
+
+    tot = {"liquido": 0, "vendas": 0, "leads": 0}
+    tot_prev = {"liquido": 0, "vendas": 0, "leads": 0}
+    atual, anterior = {}, {}
+    for p in partners:
+        a, b = series[p]["total"][-1], series[p]["total"][-2]
+        atual[p], anterior[p] = a, b
+        for k in tot:
+            tot[k] += a[k]
+            tot_prev[k] += b[k]
+
+    cac_now = _ratio(tot["liquido"], tot["vendas"])
+    cac_prev = _ratio(tot_prev["liquido"], tot_prev["vendas"])
+
+    # contribuição por contrafactual: recalcula o CAC do portfólio mantendo ESTE
+    # partner na semana anterior. A diferença é o efeito dele — exato, e responde
+    # "quem puxou" sem precisar de rateio arbitrário.
+    contrib = []
+    for p in partners:
+        liq = tot["liquido"] - atual[p]["liquido"] + anterior[p]["liquido"]
+        ven = tot["vendas"] - atual[p]["vendas"] + anterior[p]["vendas"]
+        cac_cf = _ratio(liq, ven)
+        contrib.append({
+            "partner": p,
+            "efeito_no_cac_portfolio": round(cac_now - cac_cf, 2)
+                                        if (cac_now is not None and cac_cf is not None) else None,
+            "delta_vendas": atual[p]["vendas"] - anterior[p]["vendas"],
+            "delta_liquido": atual[p]["liquido"] - anterior[p]["liquido"],
+        })
+    contrib.sort(key=lambda c: abs(c["efeito_no_cac_portfolio"] or 0), reverse=True)
+
+    por_partner = {}
+    for p in partners:
+        entrada = {"conta": _bloco_semana(atual[p], anterior[p], "total")}
+        for canal in ("google", "meta"):
+            serie = series[p].get(canal)
+            if serie and len(serie) >= 2:
+                entrada[canal] = _bloco_semana(serie[-1], serie[-2], canal)
+        por_partner[p] = entrada
+
+    return {
+        "semana": ws, "semana_anterior": ws_prev,
+        "portfolio": {
+            "cac": cac_now, "cac_anterior": cac_prev,
+            "cac_delta_pct": _delta_pct(cac_now, cac_prev, exige_positivo=True),
+            "leads": tot["leads"], "leads_anterior": tot_prev["leads"],
+            "vendas": tot["vendas"], "vendas_anterior": tot_prev["vendas"],
+            "liquido": tot["liquido"], "liquido_anterior": tot_prev["liquido"],
+            "contribuicao_por_partner": contrib,
+        },
+        "por_partner": por_partner,
     }
 
 
@@ -574,6 +798,762 @@ TRIAGEM_LABEL = {"ok": "OK", "atencao": "Atenção", "alarme": "Alarme",
                  "sem_base": "Sem base", "dado_suspeito": "Dado suspeito", "ramp": "Ramp"}
 
 
+def render_triagem_html(triagem):
+    """Tabela de triagem do topo do relatório — dado puro, renderizado aqui.
+
+    Fora do LLM de propósito: assim o bloco sai do relatório com uma linha quando
+    o Pedro decidir que não vale a pena, e nunca diverge do que a triagem decidiu.
+    """
+    linhas = []
+    for p in triagem["ordem_de_prioridade"]:
+        v = triagem["por_partner"][p]
+        c = v["conta"]
+        cac = f"R${c['cac_30d']:.0f}" if c["cac_30d"] is not None else "—"
+        cpl = f"R${c['cpl_30d']:.0f}" if c["cpl_30d"] is not None else "—"
+        churn = " (risco de churn)" if v["risco_churn"] else ""
+        canal = v["canal_critico"] if v["canal_critico"] != "nenhum" else "—"
+        linhas.append(
+            f"<tr><td><strong>{p}</strong></td><td>{TRIAGEM_LABEL[v['status_geral']]}{churn}</td>"
+            f"<td>{cac}</td><td>{cpl}</td><td>{c['vendas_30d']}</td><td>{canal}</td>"
+            f"<td>{v['motivo']}</td></tr>")
+    return ("<h2>Triagem</h2>\n<table><thead><tr><th>Partner</th><th>Status</th>"
+            "<th>CAC 30d</th><th>CPL 30d</th><th>Vendas 30d</th><th>Canal crítico</th>"
+            "<th>Motivo</th></tr></thead>\n<tbody>\n" + "\n".join(linhas) +
+            "\n</tbody></table>\n")
+
+# ── estágio 1: diagnóstico ────────────────────────────────────────────────
+
+PROMPT_E1 = """Você é especialista sênior de mídia paga e cuida das contas do MP Agência (Melhor
+Plano) — provedores regionais de internet que compram um pacote mensal de mídia
+100% investido em campanhas.
+
+Sua tarefa nesta etapa é DIAGNOSTICAR, não escrever. A redação do relatório
+acontece em outra etapa. Aqui você produz julgamento estruturado: o que explica o
+número, qual a causa provável, como validar, o que fazer.
+
+<negocio>
+Dois canais por partner:
+- google — pesquisa no Google Ads.
+  Funil: impressoes > cliques > sessoes > clickoff > redirect > leads > vendas
+- meta — click-to-WhatsApp com bot.
+  Funil: impressoes > cliques > chat_start > zip_search > redirect > leads > vendas
+
+Cashback: quando o lead gerado pela campanha de um partner fecha com OUTRO
+provedor (CEP fora da cobertura do anunciante), o anunciante recebe cashback de
+reinvestimento.
+- investimento_liquido = bruto - cashback. CPL e CAC já vêm sobre o líquido.
+- Cashback alto NÃO é problema por si só. Ele mede COBERTURA, não desperdício:
+  diz que existe demanda em CEPs onde o parceiro não atende. Se o CPL está na
+  meta e o volume de leads é razoável, a campanha está saudável e o cashback é
+  só o retrato da área atendida — não abra o parecer por ele e não recomende
+  apertar o raio de segmentação.
+- Cashback vira problema quando vem ACOMPANHADO de CPL ruim ou volume baixo de
+  leads: aí a verba está comprando demanda que não converte pro anunciante.
+- Quando o cashback é alto e o resto está saudável, a recomendação certa é
+  revisar a ÁREA DE COBERTURA do parceiro (avaliar expandir onde há demanda),
+  não cortar segmentação.
+- Atribuição de lead e venda é SEMPRE ao partner anunciante, nunca ao provedor
+  que recebeu o lead.
+
+Cada partner é uma conta isolada. A verba de um partner só pode ser realocada
+entre os canais e campanhas DELE. Nunca recomende mover verba entre partners.
+</negocio>
+
+<metas>
+- CAC: até R$150 é o ideal · R$150-200 é zona de alerta · acima de R$200 é alarme
+- CPL: até R$100 é a meta · acima disso é alerta
+
+Metas absolutas, iguais para todos os partners. Tamanho da conta não altera
+prioridade.
+</metas>
+
+<escada_de_julgamento>
+Julgue cada partner descendo esta escada e pare no primeiro degrau que o dado
+sustenta:
+
+1. CAC (30d) — indicador principal.
+2. CPL (30d) — use quando o CAC não tem base.
+3. Etapas do funil + CPC — sempre, para EXPLICAR o CAC ou o CPL do degrau acima.
+
+O degrau 3 nunca substitui os degraus 1 e 2 como veredito: ele é a explicação de
+por que o número de cima está onde está. Parecer que fica só no degrau 3, sem
+amarrar em CAC ou CPL, está incompleto.
+
+Toda avaliação de CAC e CPL usa 30d, nunca 7d: venda tem lag de fechamento e o
+CAC de 7d vem sistematicamente inflado. Use 7d apenas para topo e meio de funil
+(impressões, cliques, sessões/conversas, redirects, leads).
+</escada_de_julgamento>
+
+<como_diagnosticar>
+Ordem de investigação, por partner:
+
+1. Leia "status" e "motivo" em triagem. Os limiares já foram aplicados em código
+   — não recalcule nem discuta o status.
+
+2. Se "gargalo_relevante" for true, comece por gargalo_funil_30d: é a etapa mais
+   fraca do meio de funil e a de ação mais rápida. Se for false, o funil está
+   dentro do normal e o problema está em outro lugar — não invente gargalo.
+
+3. Leia o formato da série semanal antes de concluir. Formato é diagnóstico:
+   - degrau -> algo mudou numa data específica: campanha pausada, verba cortada,
+     segmentação alterada, rastreamento quebrado. A ação é descobrir o que mudou
+     na semana indicada.
+   - gradual_queda -> desgaste contínuo: fadiga de criativo ou leilão encarecendo.
+   - estavel -> o número atual não é notícia desta semana, é o patamar da conta.
+   - ruidoso -> volume baixo demais para ler tendência.
+
+4. Pré-clique (ctr_pct, cpc_estimado vs pares) quando o gargalo não for de meio
+   de funil. Desvio de 30% ou mais vs pares precisa aparecer no diagnóstico.
+
+5. Cashback: só entra no diagnóstico se o CPL estiver acima da meta OU o volume
+   de leads estiver baixo. Cashback alto com CPL na meta e volume razoável é
+   COBERTURA, não desperdício — nesse caso, se citar, é como oportunidade de
+   revisar a área atendida, nunca como problema de campanha, e nunca como
+   abertura do parecer.
+
+6. Taxa redirect>leads fraca ou taxa lead>venda fraca tem DUAS causas possíveis,
+   e você precisa escolher com evidência:
+   - captação desqualificada (é alavanca de mídia): volume alto + CPL abaixo da
+     meta + cashback subindo -> segmentação aberta demais puxando tráfego que não
+     fecha.
+   - funil comercial do provedor (fora da mídia): volume normal + CPL na meta +
+     cobertura ok -> atendimento ou agenda de instalação do provedor.
+   Não atribua ao provedor por default.
+
+Padrões de leitura pré-clique:
+- impressões caindo + CTR estável = perda de entrega (orçamento/lance/leilão)
+- CTR caindo + impressões estáveis = fadiga de criativo ou concorrente novo
+- impressões subindo + CTR caindo sem ganho de cliques = segmentação aberta demais
+- CPC subindo + CTR estável = leilão mais caro
+
+Padrões por etapa:
+- google: cliques ok + sessões baixas = landing ou rastreamento ·
+  sessoes>clickoff fraca = oferta pouco competitiva · clickoff>redirect fraca =
+  cobertura/viabilidade · redirect>leads fraca = fricção de formulário
+- meta: cliques>chat_start fraca = criativo/CTA ou fricção do click-to-WhatsApp ·
+  chat_start>zip_search fraca = abandono no início do bot · zip_search>redirect
+  fraca = CEPs fora da cobertura · redirect>leads fraca = fricção final do fluxo
+</como_diagnosticar>
+
+<regras_de_evidencia>
+- Todo número que você citar em qualquer campo tem que estar também em
+  evidencias_citadas, com metrica, valor e janela exatamente como aparecem no
+  payload. Número fora dessa lista é rejeitado na validação automática.
+- Essa lista é o TETO de especificidade da redação: a etapa seguinte só pode usar
+  número que esteja aqui. Declare TODO número relevante do partner, não só os que
+  você citou — o CAC e o CPL da semana e da anterior, o delta, o número do driver,
+  a taxa da etapa que moveu. Menos de 6 evidências num partner com base é sinal
+  de que você deixou a redação sem material.
+- Não calcule nada. Taxas, variações, CTR, CPC e tendências já vêm prontas. Se um
+  número que você quer citar não existe no payload, ele não existe — reformule o
+  diagnóstico no nível que os dados permitem.
+- Não cite nome de campanha, criativo, adset ou posição média: não estão no
+  payload.
+- Não atribua variação a sazonalidade, feriado ou ciclo de faturamento.
+  Sazonalidade não está mapeada neste negócio; essa atribuição é sempre
+  especulação e fecha a investigação antes da hora.
+- confianca "baixa" é resposta válida e melhor que hipótese inventada. Mas se a
+  confiança é baixa, a ação da semana é de observação ou coleta de dado, não
+  mexida em campanha.
+- Quando 7d e 30d apontarem em direções opostas na MESMA métrica, com base
+  suficiente nas duas janelas, o resultado não fechou direção: diga isso e
+  proponha acompanhar. Divergência entre métricas diferentes não autoriza essa
+  saída.
+- status "dado_suspeito" -> não diagnostique performance. A ação é verificar
+  rastreamento.
+- status "ramp" -> diga só que a conta está em ramp e o que observar quando
+  fechar 14 dias de dados.
+- risco_churn true na triagem -> o diagnóstico tem que endereçar isso
+  explicitamente, não apenas repetir o CAC.
+- Limites de tamanho: diagnostico até 400 caracteres, cadeia_causal até 300,
+  hipotese até 250, como_validar até 200, acao_semana até 250.
+</regras_de_evidencia>
+
+<comparacao_com_semana_anterior>
+Você recebe diagnostico_semana_anterior. Para cada partner que aparecer lá,
+preencha mudou_vs_semana_anterior com uma destas leituras:
+- a ação recomendada foi executada e o indicador respondeu
+- a ação foi executada e o indicador NÃO respondeu — nesse caso a hipótese
+  anterior provavelmente estava errada e você precisa de uma nova
+- a ação não parece ter sido executada (indicador e padrão seguem idênticos)
+- o diagnóstico mudou de eixo (o problema anterior saiu, apareceu outro)
+
+Partner ausente na semana anterior, ou lista vazia -> deixe o campo fora. Não
+invente continuidade.
+</comparacao_com_semana_anterior>
+
+<acoes_priorizadas>
+Além dos diagnósticos, produza a lista de ações da semana ordenada por impacto.
+Sem número mínimo nem máximo: quantas o dado sustentar.
+
+Impacto = gravidade (distância da meta, conforme o status da triagem) x confiança
+no diagnóstico. Ordene por gravidade primeiro; em caso de empate, confiança alta
+antes de média.
+
+Não inclua ação com confiança baixa nesta lista — ela vive no parecer do partner
+como observação, não como ação priorizada.
+Nunca proponha mover verba entre partners.
+</acoes_priorizadas>
+
+DADOS — data de corte {cover}:
+{payload}
+
+DIAGNÓSTICO DA SEMANA ANTERIOR:
+{diagnostico_anterior}
+
+Responda apenas com o JSON do schema. Sem markdown em volta, sem comentários."""
+
+
+STAGE1_SCHEMA = {
+    "type": "object",
+    "required": ["partners", "acoes_priorizadas"],
+    "properties": {
+        "partners": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["partner", "status_geral", "eixo_principal", "canal_critico",
+                             "diagnostico", "cadeia_causal", "acao_semana", "confianca",
+                             "evidencias_citadas", "risco_churn", "movimento_semanal"],
+                "properties": {
+                    "partner": {"type": "string"},
+                    "status_geral": {"type": "string",
+                                     "enum": ["ok", "atencao", "alarme", "sem_base",
+                                              "dado_suspeito", "ramp"]},
+                    "eixo_principal": {"type": "string",
+                                       "enum": ["cac", "cpl", "funil", "pre_clique", "cobertura",
+                                                "rastreamento", "ramp", "saudavel"]},
+                    "canal_critico": {"type": "string",
+                                      "enum": ["google", "meta", "ambos", "nenhum"]},
+                    # "até N caracteres" fazia o modelo mirar ~50% do teto (medido
+                    # no run de 26/07). Descrição agora pede o CONTEÚDO esperado;
+                    # o tamanho vem de ter o que dizer, não de um alvo numérico.
+                    "diagnostico": {"type": "string", "description":
+                        "O que está acontecendo com a conta ESTA semana. Cobrir: o "
+                        "movimento de CAC e CPL vs a semana anterior (ou dizer que "
+                        "não há base), em qual canal, e o número que sustenta cada "
+                        "afirmação. 3 a 5 frases densas, 400-700 caracteres."},
+                    "cadeia_causal": {"type": "string", "description":
+                        "A cadeia completa: métrica de topo -> etapa do funil que "
+                        "moveu -> efeito em CPL/CAC. Use o driver.principal do "
+                        "comparativo. 300-500 caracteres."},
+                    "hipotese": {"type": "string", "description":
+                        "Causa raiz provável, com o mecanismo — não só o rótulo. "
+                        "Obrigatório quando confianca for alta ou media. 200-350 "
+                        "caracteres."},
+                    "como_validar": {"type": "string", "description":
+                        "O que olhar para confirmar ou derrubar a hipótese, e em "
+                        "qual prazo. Obrigatório quando houver hipótese. 150-300 "
+                        "caracteres."},
+                    "acao_semana": {"type": "string", "description":
+                        "O que fazer, específico o bastante para alguém executar "
+                        "sem perguntar nada. 200-350 caracteres."},
+                    "confianca": {"type": "string", "enum": ["alta", "media", "baixa"]},
+                    "risco_churn": {"type": "boolean"},
+                    "mudou_vs_semana_anterior": {"type": "string", "description":
+                        "Leitura de continuidade vs o diagnóstico da semana passada: "
+                        "a ação foi executada e respondeu, foi executada e não "
+                        "respondeu (hipótese errada), não parece ter sido executada, "
+                        "ou o problema mudou de eixo."},
+                    "movimento_semanal": {"type": "string", "description":
+                        "Uma frase: CAC e CPL subiram ou caíram vs a semana anterior, "
+                        "em qual canal, e o que puxou. Se não houver base, dizer isso "
+                        "explicitamente em vez de omitir."},
+                    "evidencias_citadas": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "required": ["metrica", "valor", "janela"],
+                            "properties": {
+                                "metrica": {"type": "string"},
+                                "valor": {"type": "string"},
+                                "janela": {"type": "string"},
+                                "canal": {"type": "string", "enum": ["google", "meta", "ambos"]},
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        "acoes_priorizadas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["ordem", "partner", "canal", "acao", "justificativa",
+                             "impacto_esperado", "confianca"],
+                "properties": {
+                    "ordem": {"type": "integer"},
+                    "partner": {"type": "string"},
+                    "canal": {"type": "string", "enum": ["google", "meta", "ambos"]},
+                    "acao": {"type": "string"},
+                    "justificativa": {"type": "string"},
+                    "impacto_esperado": {"type": "string"},
+                    "confianca": {"type": "string", "enum": ["alta", "media"]},
+                },
+            },
+        },
+    },
+}
+
+
+# ── estágio 2: redação ────────────────────────────────────────────────────
+#
+# Tags XML e não JSON: não existe escape pra quebrar, truncamento devolve as
+# seções que fecharam em vez de perder o run inteiro, e prosa longa dentro de
+# string JSON é onde o Gemini erra escape com mais frequência.
+
+PROMPT_E2 = """Você é especialista sênior de mídia paga do MP Agência e está escrevendo o
+relatório semanal das contas. Os diagnósticos já estão fechados — seu trabalho
+aqui é redigir, não reanalisar.
+
+<leitores>
+Três públicos no mesmo documento:
+- Time de mídia — executa as ações. Precisa da alavanca específica: qual canal,
+  qual etapa, o que mexer.
+- PM do projeto — precisa da leitura de conjunto e do que mudou desde a semana
+  passada.
+- CEO — lê o topo e para. Precisa saber onde está o dinheiro em risco e qual é a
+  decisão da semana, sem vocabulário de operação.
+
+Voz de especialista de mídia falando sobre contas que acompanha toda semana:
+direto, opinativo, específico. Não é consultoria externa avaliando de fora, nem
+laudo formal. O topo do relatório precisa funcionar para o CEO; o detalhe é do
+time de mídia.
+</leitores>
+
+<materia_prima>
+Você recebe o JSON de diagnóstico desta semana e o da semana anterior. Não recebe
+os dados brutos — de propósito. Os leitores já têm um dashboard interativo com
+todos os números, funis e comparações. Relatório que repete o dashboard tem valor
+zero; seu valor é o raciocínio.
+</materia_prima>
+
+<regra_dos_numeros>
+Você só pode citar números que aparecem em evidencias_citadas do partner
+correspondente. Nada além disso — não estime, não arredonde para um valor que não
+está lá, não some, não calcule variação.
+
+Critério de uso, não de quantidade: todo número citado tem que estar na mesma
+frase que a conclusão que ele sustenta. Número solto, sem inferência amarrada, é
+recitação de dashboard — corte.
+
+Quando o volume for baixo, prefira absolutos a percentuais: "de 20 leads, só 3
+viraram venda" comunica o tamanho real do problema melhor que "taxa de 15%".
+
+Valores em R$ sem centavos.
+</regra_dos_numeros>
+
+<ordem_de_escrita>
+Escreva nesta ordem, porque cada bloco depende do anterior:
+1. pareceres por partner
+2. recomendações
+3. leitura de portfólio (derivada dos pareceres que você acabou de escrever)
+4. resumo Slack (derivado da leitura de portfólio)
+
+Não escreva o resumo antes dos pareceres.
+</ordem_de_escrita>
+
+<pareceres>
+Um parecer por partner, na ordem de prioridade que vier no JSON. Nunca omita um
+partner.
+
+4 a 7 frases. Todo parecer cobre, obrigatoriamente:
+
+1. O MOVIMENTO DA SEMANA — CAC e CPL subiram ou caíram vs a semana anterior, e em
+   qual canal. Use `movimento_semanal`. Se o diagnóstico disser que não há base
+   para leitura semanal, diga isso em uma frase e siga para a janela de 30d.
+2. O QUE EXPLICA — a cadeia causal, terminando na alavanca concreta que moveu
+   (taxa de conversão em qual etapa, CPC, ou volume de investimento).
+3. A HIPÓTESE, quando existir no diagnóstico. Não é opcional: é a parte que o
+   dashboard não faz. Escreva o mecanismo, não o rótulo.
+4. COMO VALIDAR, quando existir. Uma frase.
+5. A AÇÃO da semana.
+
+Os campos 3 e 4 vinham sendo descartados na redação — o diagnóstico produzia
+hipótese e forma de validar e o parecer publicava sem eles. Se estão no JSON,
+entram no texto.
+
+Os campos cobertos são fixos — a ênfase e a ordem são livres. Abra pela parte
+mais forte da história daquela conta, não por um template. Uma conta com degrau na
+série abre pelo degrau; uma conta com gargalo de bot abre pelo bot; uma conta
+saudável e subaproveitada abre pela oportunidade.
+
+Quando mudou_vs_semana_anterior estiver preenchido, isso entra no parecer —
+inclusive quando a leitura é que a ação anterior não foi executada, ou foi e não
+funcionou. Essa é a parte do relatório que nenhum dashboard faz.
+
+Partner em ramp, sem_base ou dado_suspeito: uma frase dizendo o que é e o que
+verificar. Não force análise.
+</pareceres>
+
+<leitura_portfolio>
+Comece pelo movimento da carteira, no formato que o time pediu: o CAC geral desta
+semana vs a anterior, em %, e QUAIS provedores mais contribuíram para o
+movimento. Use o bloco COMPARATIVO PORTFÓLIO (abaixo, fora do diagnóstico) —
+`contribuicao_por_partner` já vem ordenado por impacto e diz quanto cada um
+empurrou o CAC em reais. Cite os 2 ou 3 primeiros pela direção do efeito — quem
+puxou pra cima e quem segurou. Se vier "(sem dado suficiente pra comparar
+semanas)", diga isso em vez de inventar a comparação.
+
+Depois: onde o MP Agência ganha e perde dinheiro hoje, qual conta exige ação
+urgente e por quê, e a decisão mais importante da semana.
+
+Escrito para o CEO: sem jargão de etapa de funil, sem nome de métrica de
+plataforma. Se houver padrão de portfólio — várias contas com o mesmo problema ao
+mesmo tempo — a manchete é o padrão, não a conta individual.
+
+Verba nunca se move entre partners. Cada conta é isolada e os resultados são dela.
+</leitura_portfolio>
+
+<nao_faca>
+- Não escreva frase que não contenha diagnóstico, hipótese, risco, oportunidade
+  ou decisão. Teste: se a frase não muda nenhuma decisão do leitor, corte.
+- Não subdivida o parecer em "Google:" / "Meta:" com lista de métricas. Canal
+  entra na narrativa quando for relevante para o diagnóstico.
+- Não use preâmbulo ("vale destacar que", "é importante notar", "conforme os
+  dados") nem adjetivo que não carrega informação.
+- Não repita entre seções. O resumo Slack não é a leitura de portfólio
+  abreviada, é a conclusão dela.
+- Não hedge quando o diagnóstico tem confiança alta. Posicione-se: faça X porque
+  Y. Quando o diagnóstico disser que o resultado não fechou direção, dizer
+  "vamos acompanhar mais uma semana" é a posição correta, não uma fuga.
+- Não comente crédito, saldo ou runway do pacote — há alertas dedicados a isso.
+- Não mencione responsáveis, pessoas ou times na ação. Descreva o problema, a
+  hipótese e o que fazer.
+- Não invente número, data ou nome de campanha.
+- Não use emoji em nenhum dos quatro blocos da resposta, em nenhuma hipótese.
+</nao_faca>
+
+<formato>
+Responda com os quatro blocos abaixo, nesta ordem, sem markdown em volta e sem
+texto fora das tags:
+
+<pareceres>
+HTML. Um h3 com o nome do partner por parecer, seguido de p.
+Tags permitidas: h3, p, strong, ul, li.
+</pareceres>
+
+<recomendacoes>
+HTML. Uma table com thead/tbody e as colunas: Prioridade, Partner, Canal, Ação,
+Justificativa, Impacto esperado, Confiança.
+Uma linha por item de acoes_priorizadas, na ordem do JSON.
+Esta tabela é o recorte executável dos pareceres — repetição aqui é intencional.
+Não introduza ação que não esteja no JSON.
+</recomendacoes>
+
+<leitura_portfolio>
+HTML. Um único p.
+</leitura_portfolio>
+
+<resumo_slack>
+Texto puro em mrkdwn do Slack (*negrito*, bullets com •). Até 600 caracteres.
+SEM NENHUM EMOJI (nem no texto, nem como marcador de bullet).
+SÓ os pontos críticos — pra quem vai ler batendo o olho no celular. NÃO
+mencione contas saudáveis, estáveis ou "indo bem": se o status_geral do
+partner na triagem é "ok", ele não entra aqui, nem como contraste positivo.
+1 bullet com a leitura crítica da semana — a conclusão, não os números.
+2 a 3 bullets com os diagnósticos mais graves (alarme/atenção/risco de churn),
+cada um com o motivo em poucas palavras.
+1 bullet com a ação nº 1.
+Se NENHUMA conta estiver em alarme ou atenção, diga isso em 1 frase curta e
+pare — não force um problema que não existe.
+</resumo_slack>
+</formato>
+
+DIAGNÓSTICO DESTA SEMANA (corte {cover}):
+{diagnostico_json}
+
+DIAGNÓSTICO DA SEMANA ANTERIOR:
+{diagnostico_anterior}
+
+COMPARATIVO PORTFÓLIO (última semana completa vs. a anterior, calculado em
+Python — só para a leitura de portfólio, não é diagnóstico por partner):
+{comparativo_portfolio}"""
+
+
+# ── chamadas ao Gemini ────────────────────────────────────────────────────
+
+RETRYABLE = {429, 500, 502, 503, 529}
+
+
+def _post(body, tries=3):
+    """POST no Gemini com retry só em erro transiente. 4xx de auth/payload
+    estoura na hora — retentar um payload inválido só queima tempo."""
+    url = GEMINI_URL.format(model=_model())
+    last = None
+    for i in range(tries):
+        if i:
+            time.sleep(20 * i)
+        r = requests.post(url, headers={"x-goog-api-key": os.environ["LLM_API_KEY"]},
+                          json=body, timeout=REQUEST_TIMEOUT)
+        if r.status_code in RETRYABLE:
+            last = requests.HTTPError(f"{r.status_code} do Gemini", response=r)
+            print(f"Aviso: Gemini devolveu {r.status_code} (tentativa {i + 1}/{tries}).")
+            continue
+        r.raise_for_status()
+        parts = r.json()["candidates"][0]["content"]["parts"]
+        return "".join(p.get("text", "") for p in parts)
+    raise last
+
+
+def call_stage1(payload, cover, diag_anterior):
+    """Thinking alto: é a etapa de julgamento e se beneficia."""
+    prompt = (PROMPT_E1
+              .replace("{cover}", cover)
+              .replace("{payload}", json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+              .replace("{diagnostico_anterior}",
+                       json.dumps(diag_anterior, ensure_ascii=False, separators=(",", ":"))
+                       if diag_anterior else "(primeira semana — não existe diagnóstico anterior)"))
+    txt = _post({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": 65536,
+            "responseMimeType": "application/json",
+            "responseSchema": STAGE1_SCHEMA,
+            "thinkingConfig": {"thinkingBudget": 24576},
+        },
+    })
+    return json.loads(txt)
+
+
+def call_stage2(diag, cover, diag_anterior, comparativo_portfolio=None):
+    """Thinking baixo: aqui é executar uma especificação; thinking alto só
+    aumenta a variância da redação.
+
+    `comparativo_portfolio` (bugfix do porte, 2026-07-28): o PROMPT_E2 instrui
+    a leitura de portfólio a usar `portfolio.contribuicao_por_partner`, mas o
+    estágio 2 só recebia `diag` — o JSON do estágio 1, que por schema
+    (STAGE1_SCHEMA) não tem esse campo. Esse dado nunca chegava aqui na versão
+    original (nunca rodou ponta a ponta, ver HANDOFF.md de lá). Passado agora
+    explicitamente, calculado em Python por `comparativo_semanal()`.
+    """
+    prompt = (PROMPT_E2
+              .replace("{cover}", cover)
+              .replace("{diagnostico_json}", json.dumps(diag, ensure_ascii=False, separators=(",", ":")))
+              .replace("{diagnostico_anterior}",
+                       json.dumps(diag_anterior, ensure_ascii=False, separators=(",", ":"))
+                       if diag_anterior else "(primeira semana — sem bloco de continuidade)")
+              .replace("{comparativo_portfolio}",
+                       json.dumps(comparativo_portfolio, ensure_ascii=False, separators=(",", ":"))
+                       if comparativo_portfolio else "(sem dado suficiente pra comparar semanas)"))
+    return _post({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.5, "maxOutputTokens": 32768,
+                             "thinkingConfig": {"thinkingBudget": 2048}},
+    })
+
+
+BLOCOS = ("pareceres", "recomendacoes", "leitura_portfolio", "resumo_slack")
+TAGS_OK = {"h3", "p", "strong", "ul", "li", "table", "thead", "tbody", "tr", "th", "td"}
+
+
+def parse_blocos(txt):
+    out = {}
+    for b in BLOCOS:
+        m = re.search(rf"<{b}>(.*?)</{b}>", txt, re.S)
+        if m:
+            out[b] = m.group(1).strip()
+    return out
+
+
+def sanitize(html):
+    """Nunca deixar o LLM injetar script/style/iframe na página publicada."""
+    return re.sub(r"<\s*/?\s*(script|style|iframe|link|meta|object|embed)\b[^>]*>", "", html, flags=re.I)
+
+
+# faixas unicode de emoji/pictograma — removidas por código em vez de só pedir
+# ao LLM, porque o modelo ignora a instrução de vez em quando (visto em
+# produção na versão anterior deste arquivo, ex.: "Fala time! 🚀" sem nunca ter
+# sido pedido).
+EMOJI_RE = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
+    "\U00002700-\U000027BF\U0001F900-\U0001F9FF\U00002B00-\U00002BFF"
+    "\U0000FE0F\U0000200D]+")
+
+
+def _strip_emoji(text):
+    return EMOJI_RE.sub("", text) if text else text
+
+
+# ── validação ─────────────────────────────────────────────────────────────
+
+def _numeros(txt):
+    limpo = re.sub(r"<[^>]+>", " ", txt)
+    achados = set()
+    for m in re.finditer(r"(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:[.,]\d+)?)", limpo):
+        try:
+            v = float(m.group(1).replace(".", "").replace(",", "."))
+        except ValueError:
+            continue
+        if v >= 2:      # ignora 0 e 1, que aparecem em prosa ("1 lead", "0%")
+            achados.add(round(v, 2))
+    return achados
+
+
+def _permitidos(diag):
+    ok = set()
+    for p in diag.get("partners", []):
+        for e in p.get("evidencias_citadas", []):
+            for m in re.finditer(r"(\d{1,3}(?:\.\d{3})*(?:,\d+)?|\d+(?:[.,]\d+)?)", str(e.get("valor", ""))):
+                try:
+                    v = float(m.group(1).replace(".", "").replace(",", "."))
+                except ValueError:
+                    continue
+                ok.add(round(v, 2))
+                ok.add(float(round(v)))
+    return ok
+
+
+def validar(triagem, diag, blocos):
+    """Checks que o desenho pediu. Devolve (avisos, erros_fatais).
+
+    O check de números é o que mata a classe de erro do prompt antigo, em que o
+    modelo citava "estável há 6 semanas" — número que não existia no payload.
+    """
+    avisos, fatais = [], []
+
+    esperados = set(triagem["por_partner"])
+    vistos = {p.get("partner") for p in diag.get("partners", [])}
+    faltando = esperados - vistos
+    if faltando:
+        fatais.append(f"partner ausente no diagnóstico: {', '.join(sorted(faltando))}")
+
+    for p in diag.get("partners", []):
+        t = triagem["por_partner"].get(p.get("partner"))
+        if t and t["status_geral"] != p.get("status_geral"):
+            fatais.append(f"{p['partner']}: modelo reclassificou status "
+                          f"({p.get('status_geral')} vs {t['status_geral']} da triagem)")
+
+    for a in diag.get("acoes_priorizadas", []):
+        if a.get("confianca") == "baixa":
+            fatais.append(f"ação priorizada com confiança baixa: {a.get('partner')}")
+
+    # densidade: os dois sintomas medidos no run de 26/07 (pareceres rasos)
+    com_base = {k for k, v in triagem["por_partner"].items()
+                if v["status_geral"] in ("ok", "atencao", "alarme")}
+    magros = [p["partner"] for p in diag.get("partners", [])
+              if p.get("partner") in com_base and len(p.get("evidencias_citadas", [])) < 6]
+    if magros:
+        avisos.append("poucas evidências declaradas (teto da especificidade da prosa): "
+                      + ", ".join(magros))
+    sem_hip = [p["partner"] for p in diag.get("partners", [])
+               if p.get("partner") in com_base
+               and p.get("confianca") in ("alta", "media") and not p.get("hipotese")]
+    if sem_hip:
+        avisos.append("confiança alta/média sem hipótese: " + ", ".join(sem_hip))
+
+    churn_tri = {k for k, v in triagem["por_partner"].items() if v["risco_churn"]}
+    churn_diag = {p["partner"] for p in diag.get("partners", []) if p.get("risco_churn")}
+    if churn_tri - churn_diag:
+        avisos.append(f"risco de churn não endereçado: {', '.join(sorted(churn_tri - churn_diag))}")
+
+    if blocos is not None:
+        for b in BLOCOS:
+            if not blocos.get(b):
+                fatais.append(f"bloco <{b}> ausente ou não fechou")
+        n_h3 = len(re.findall(r"<h3", blocos.get("pareceres", ""), re.I))
+        if n_h3 != len(vistos):
+            avisos.append(f"{n_h3} pareceres para {len(vistos)} partners")
+        if len(blocos.get("resumo_slack", "")) > 700:
+            avisos.append(f"resumo Slack com {len(blocos['resumo_slack'])} caracteres (limite 700)")
+        prosa = " ".join(blocos.get(b, "") for b in ("pareceres", "leitura_portfolio", "resumo_slack"))
+        usadas = {t.lower() for t in re.findall(r"<\s*/?\s*([a-zA-Z0-9]+)", prosa)}
+        if usadas - TAGS_OK:
+            avisos.append(f"tag fora da whitelist: {', '.join(sorted(usadas - TAGS_OK))}")
+        permitidos = _permitidos(diag)
+        inventados = {v for v in _numeros(prosa)
+                      if v not in permitidos and float(round(v)) not in permitidos}
+        if inventados:
+            amostra = ", ".join(str(v) for v in sorted(inventados)[:12])
+            avisos.append(f"número na prosa fora de evidencias_citadas: {amostra}")
+
+    return avisos, fatais
+
+
+# ── orquestração ──────────────────────────────────────────────────────────
+
+DIAG_DIR = "data/diagnosticos"
+
+
+def _diag_anterior(repo_root):
+    """Diagnóstico mais recente já persistido. Na 1ª semana não existe e o
+    bloco de continuidade simplesmente não sai."""
+    d = os.path.join(repo_root, DIAG_DIR)
+    if not os.path.isdir(d):
+        return None, None
+    arquivos = sorted(f for f in os.listdir(d) if f.endswith(".json"))
+    if not arquivos:
+        return None, None
+    with open(os.path.join(d, arquivos[-1]), encoding="utf-8") as f:
+        return json.load(f), arquivos[-1][:-5]
+
+
+def build_context(all_daily, all_dfg, all_dfm, cutoff_dt, partners):
+    """Payload + triagem. Puro cálculo, sem LLM.
+
+    Separado do run() de propósito: é também o contexto da aba de chat, que
+    precisa existir mesmo quando a análise semanal falha ou está desligada.
+    """
+    payload = build_payload(all_daily, all_dfg, all_dfm, cutoff_dt, partners)
+    payload["triagem"] = triar(payload)
+    return payload
+
+
+def run(context, cutoff_dt, repo_root):
+    """Estágios 1 e 2 sobre um contexto já montado por build_context().
+
+    Levanta exceção em falha — quem chama (o refresh) engole e segue sem a
+    análise. Análise nunca derruba o refresh.
+    """
+    cover = cutoff_dt.strftime("%d/%m/%y")
+    payload = context
+    triagem = payload["triagem"]
+
+    anterior, anterior_data = _diag_anterior(repo_root)
+
+    diag = call_stage1(payload, cover, anterior)
+    avisos, fatais = validar(triagem, diag, None)
+    if fatais:
+        raise RuntimeError("estágio 1 reprovou na validação: " + " · ".join(fatais))
+
+    comparativo = payload.get("comparativo_semana_vs_semana") or {}
+    texto = call_stage2(diag, cover, anterior, comparativo.get("portfolio"))
+    blocos = parse_blocos(texto)
+    a2, f2 = validar(triagem, diag, blocos)
+    avisos += a2
+    if f2:
+        raise RuntimeError("estágio 2 reprovou na validação: " + " · ".join(f2))
+
+    for b in ("pareceres", "recomendacoes", "leitura_portfolio"):
+        blocos[b] = _strip_emoji(sanitize(blocos[b]))
+    if blocos.get("resumo_slack"):
+        blocos["resumo_slack"] = _strip_emoji(blocos["resumo_slack"]).strip()
+
+    os.makedirs(os.path.join(repo_root, DIAG_DIR), exist_ok=True)
+    with open(os.path.join(repo_root, DIAG_DIR, f"{cutoff_dt.isoformat()}.json"), "w",
+              encoding="utf-8") as f:
+        json.dump(diag, f, ensure_ascii=False, indent=1)
+
+    return {
+        "gerado_em": cutoff_dt.isoformat(),
+        "cover": cover,
+        "modelo": _model(),
+        "triagem": triagem,
+        "triagem_html": render_triagem_html(triagem),
+        "diagnostico": diag,
+        "diagnostico_anterior_de": anterior_data,
+        "blocos": blocos,
+        "avisos": avisos,
+    }
+
+
+# ── saída específica desta versão (HTML publicado + Slack) ─────────────────
+#
+# Não existe na versão Streamlit original — lá o app lê data/analysis.json e
+# renderiza com st.markdown. Aqui não tem app: o resultado do run() vira uma
+# página estática (docs/analise.html) e um resumo no Slack.
+
 def render_cac_slack(payload):
     """CAC 30d por partner ATIVO, separado por canal — pro bloco de thread do Slack.
 
@@ -602,411 +1582,23 @@ def render_cac_slack(payload):
     return "*CAC 30d por parceiro (canal):*\n" + "\n".join(linhas)
 
 
-def render_triagem_html(triagem):
-    """Tabela de triagem do topo do relatório — dado puro, renderizado aqui.
+def render_report_body(result):
+    """Monta o corpo HTML de docs/analise.html a partir dos blocos do estágio 2.
 
-    Fora do LLM de propósito: assim o bloco sai do relatório com uma linha quando
-    o Pedro decidir que não vale a pena, e nunca diverge do que a triagem decidiu.
+    O estágio 2 devolve 4 blocos soltos (pareceres/recomendacoes/leitura_portfolio/
+    resumo_slack), sem os h2 de seção que o relatório publicado precisa — aqui
+    só empacota, sem reescrever conteúdo.
     """
-    linhas = []
-    for p in triagem["ordem_de_prioridade"]:
-        v = triagem["por_partner"][p]
-        c = v["conta"]
-        cac = f"R${c['cac_30d']:.0f}" if c["cac_30d"] is not None else "—"
-        cpl = f"R${c['cpl_30d']:.0f}" if c["cpl_30d"] is not None else "—"
-        churn = " (risco de churn)" if v["risco_churn"] else ""
-        canal = v["canal_critico"] if v["canal_critico"] != "nenhum" else "—"
-        linhas.append(
-            f"<tr><td><strong>{p}</strong></td><td>{TRIAGEM_LABEL[v['status_geral']]}{churn}</td>"
-            f"<td>{cac}</td><td>{cpl}</td><td>{c['vendas_30d']}</td><td>{canal}</td>"
-            f"<td>{v['motivo']}</td></tr>")
-    return ("<h2>Triagem</h2>\n<table><thead><tr><th>Partner</th><th>Status</th>"
-            "<th>CAC 30d</th><th>CPL 30d</th><th>Vendas 30d</th><th>Canal crítico</th>"
-            "<th>Motivo</th></tr></thead>\n<tbody>\n" + "\n".join(linhas) +
-            "\n</tbody></table>\n")
+    blocos = result["blocos"]
+    partes = [result["triagem_html"]]
+    if blocos.get("leitura_portfolio"):
+        partes.append("<h2>Leitura do Portfólio</h2>\n" + blocos["leitura_portfolio"])
+    if blocos.get("pareceres"):
+        partes.append("<h2>Parecer por Partner</h2>\n" + blocos["pareceres"])
+    if blocos.get("recomendacoes"):
+        partes.append("<h2>Recomendações</h2>\n" + blocos["recomendacoes"])
+    return "\n".join(partes)
 
-
-# ── prompt ────────────────────────────────────────────────────────────────
-
-PROMPT_TEMPLATE = """Você é a analista de mídia paga sênior que cuida das contas do MP Agência \
-(Melhor Plano) — o mesmo papel de quem roda essas campanhas dia a dia no Google Ads e Meta Ads. \
-Toda semana você escreve pro PRÓPRIO TIME de mídia e pro coordenador do serviço um resumo de como \
-cada conta está indo, no mesmo tom de quem está no dia a dia da operação: direto, específico, sem \
-formalidade de consultoria externa. Você já viu essas contas semana passada — este relatório é uma \
-continuação, não uma auditoria fria.
-
-FATO CENTRAL: seus leitores JÁ TÊM um dashboard interativo com todos os números, funis, séries e \
-comparações de período. Relatório que repete números do dashboard tem valor ZERO. Seu valor é o que \
-o dashboard não faz: pensamento crítico — explicar POR QUE os números estão como estão, cruzar \
-sinais que uma tabela não cruza, formular hipóteses de causa raiz e se posicionar sobre O QUE FAZER.
-Uma boa semana de análise soa como "Loga continua indo bem, o CAC caiu X% — a maior parte veio do \
-Meta" ou "esse resultado ainda está se firmando, vamos acompanhar mais uma semana", não como um \
-laudo formal de consultoria.
-
-<contexto_negocio>
-O MP Agência (Melhor Plano) vende para provedores regionais ("partners") um pacote de mídia 100%
-investido em campanhas, sem fee de agência. São 2 canais por partner:
-- google: campanhas de pesquisa no Google Ads. Funil: impressoes > cliques > sessoes > clickoff >
-  redirect > leads > vendas.
-- meta: campanhas de WhatsApp no Meta Ads (click-to-WhatsApp com bot). Funil: impressoes > cliques >
-  chat_start > zip_search > redirect > leads > vendas.
-
-MECÂNICA DO CASHBACK (importante): quando o lead gerado pela campanha de um partner fecha com OUTRO
-provedor (ex.: sem cobertura do anunciante no CEP do usuário), o anunciante recebe cashback de
-reinvestimento. Por isso:
-- investimento_liquido = investimento_bruto - cashback. CPL e CAC JÁ vêm calculados sobre o líquido.
-- Cashback alto NÃO é problema por si só. Ele mede COBERTURA, não desperdício: diz que existe
-  demanda em CEPs onde o parceiro não atende. Se o CPL está na meta e o volume de leads é razoável,
-  a campanha está saudável e o cashback é só o retrato da área atendida — não abra o parecer por
-  ele e não recomende apertar o raio de segmentação.
-- Cashback vira problema quando vem ACOMPANHADO de CPL ruim ou volume baixo de leads: aí a verba
-  está comprando demanda que não converte pro anunciante.
-- Quando o cashback é alto e o resto está saudável, a recomendação certa é revisar a ÁREA DE
-  COBERTURA do parceiro (avaliar expandir onde há demanda), não cortar segmentação.
-- Atribuição de lead e venda é SEMPRE ao partner anunciante (quem pagou a campanha), nunca ao
-  provedor que recebeu o lead.
-</contexto_negocio>
-
-<definicoes_fixas>
-Não recalcule nem reinterprete:
-- Lead (produtivo): lead registrado e aceito pelo provedor.
-- Venda: lead com situação sold, installed ou scheduled.
-- CPL = investimento líquido / leads. CAC = investimento líquido / vendas.
-- ctr_pct = cliques / impressões (%). cpc_estimado = investimento bruto / cliques — é ESTIMADO:
-  investimento vem do sistema financeiro e cliques da plataforma de ads, bases diferentes do
-  gerenciador. Use para tendência e comparação entre janelas, não para auditar o valor absoluto.
-- taxas_etapa (dentro de cada janela de funil): taxa de passagem (%) entre cada par de etapas
-  consecutivas (ex.: "sessoes>clickoff"). Já vem calculada — não recalcule a partir das contagens.
-- gargalo_funil_30d: a ETAPA do meio de funil já identificada como mais fraca de cada
-  partner×canal em 30d (maior desvio negativo vs pares OU vs a própria janela anterior). Este é
-  o ponto de partida do diagnóstico de funil — veja <como_pensar>.
-- tendencia_semanal_por_partner: direção da série de 8 semanas (alta/queda/estavel, comparando
-  1ª metade com 2ª metade) e há quantas semanas seguidas o valor está estável (dentro de ±15%
-  da média das 8). Use isso pra dizer "há N semanas", não invente esse número.
-- triagem: status por partner (ok/atencao/alarme/sem_base/dado_suspeito/ramp) JÁ CALCULADO em
-  código a partir de limiares fixos de CAC/CPL (não pelo modelo). Vem em
-  triagem.por_partner[partner].status_geral, com o motivo em .motivo, o canal mais problemático em
-  .canal_critico e risco de churn (CAC acima do alarme por 2 janelas de 30d seguidas com leads em
-  queda/estáveis) em .risco_churn. NÃO recalcule nem reclassifique esse status: se a triagem diz
-  "ok", o parecer não pode soar como alarme, e vice-versa. O julgamento textual explica o PORQUÊ do
-  status, nunca discorda dele.
-- Valores monetários em R$ (BRL).
-</definicoes_fixas>
-
-<parametros_de_analise>
-- Base mínima para apontar anomalia: >= 10 eventos na etapa OU padrão que se repete em >= 3 semanas
-  da série semanal. Abaixo disso, não alarme — no máximo cite como "sinal fraco, monitorar".
-- Variação relevante: |variação| >= 25% entre janelas comparadas, respeitando a base mínima.
-- Benchmark: compare cada partner primeiro com o próprio histórico (série semanal e janela
-  anterior); use a média dos demais partners no mesmo canal apenas como referência secundária de
-  taxas de passagem.
-- Confiança: só recomende ações com confiança alta ou média. Rotule cada recomendação com
-  [confiança alta] ou [confiança média]. Sem base suficiente = não recomende.
-</parametros_de_analise>
-
-<cuidados_de_leitura>
-- Vendas têm lag de fechamento (lead vira venda dias depois): em janelas de 7d, vendas ficam
-  subestimadas e CAC inflado. Use 7d vs 7d_prev para topo e meio de funil (impressões, cliques,
-  sessões/conversas, redirects, leads) e 30d vs 30d_prev para eficiência (CPL, CAC, taxa
-  lead>venda) e leitura de custo.
-- kpis_por_partner_canal_janela e funil_*_por_partner usam metodologias de atribuição levemente
-  diferentes; pequenas divergências de leads/vendas entre os dois blocos são esperadas — não trate
-  como erro nem some os dois.
-- Impressões, CTR e CPC existem só nos blocos de funil (funil_google_por_partner /
-  funil_meta_por_partner).
-- "sessoes" (Google) pode ter ~1% de dupla contagem na virada do dia. Ignore variações pequenas
-  nessa etapa.
-- A etapa lead > venda depende da operação comercial do PROVEDOR (atendimento, agenda de
-  instalação), não da campanha. Se o gargalo for aí, a recomendação é acionar o responsável pela
-  conta/provedor, não mexer em mídia.
-- Não invente dados: se uma informação não está no JSON (ex.: nome de campanha, criativo específico,
-  posição média), não a cite. Formule a recomendação no nível que os dados permitem.
-- Trate a janela de 30d como o "período fechado" (equivalente a olhar o mês que passou) e a de 7d
-  como "a última semana" — é essa a comparação que importa pro time: como a semana mais recente se
-  compara com o período mais estável, não só semana vs semana anterior.
-- Se investimento > 0 mas leads/vendas ficam vazios ou zerados nas duas janelas (7d E 30d) pro
-  mesmo partner×canal, considere que pode ser falha de rastreamento/dashboard, não performance real
-  zerada — sinalize como "dado parece ausente, verificar no dashboard" em vez de tratar como fracasso
-  de campanha.
-- Quando o volume for baixo (perto da base mínima de 10 eventos), prefira números absolutos a
-  percentuais: "de 20 leads, só 3 viraram venda" comunica mais que "taxa de 15%" — o time sente o
-  tamanho real do problema.
-</cuidados_de_leitura>
-
-<como_pensar>
-Antes de escrever, monte internamente o quadro de cada partner — NESTA ORDEM (não pule etapas):
-
-0. Leia triagem.por_partner[partner] primeiro: status_geral e motivo já vêm prontos, calculados
-   por regra fixa, não por você. Seu trabalho não é decidir se a conta está bem ou mal — é explicar
-   POR QUE ela está no status que a triagem já determinou, usando os passos 1-6 abaixo como
-   evidência. Se dias_de_dados < 14 (status "ramp"), diga só que a conta está em ramp e o que
-   observar. Se status for "dado_suspeito", não diagnostique performance — a ação é verificar
-   rastreamento.
-1. Abra por gargalo_funil_30d e tendencia_semanal_por_partner primeiro. gargalo_funil_30d já
-   aponta a etapa mais fraca do meio de funil (google: sessoes>clickoff, clickoff>redirect,
-   redirect>leads; meta: chat_start>zip_search, zip_search>redirect, redirect>leads) — é o
-   diagnóstico mais específico e acionável que existe no payload, e o que o time de mídia
-   consegue agir mais rápido (ajuste de landing, oferta, fricção do bot). Comece a análise por
-   aqui, não pelo cashback.
-2. Só depois olhe benchmark_pre_clique_30d (CTR/CPC vs pares). Desvio de 30% ou mais DEVE
-   aparecer no parecer: CTR muito abaixo dos pares = criativo/segmentação; CPC muito acima =
-   leilão/qualidade do anúncio.
-3. Cashback (pct_cashback) só entra no diagnóstico se o CPL estiver acima da meta OU o volume de
-   leads estiver baixo. Cashback alto com CPL na meta e volume razoável é COBERTURA, não
-   desperdício — nesse caso, se citar, é como oportunidade de revisar a área atendida, nunca como
-   problema de campanha, e nunca como abertura do parecer.
-4. Use tendencia_semanal_por_partner pra dizer HÁ QUANTAS SEMANAS o padrão se repete
-   (semanas_estaveis_consecutivas) em vez de citar só o valor da janela atual — isso é o que
-   separa tendência real de ruído de uma semana.
-5. Compare a janela de 7d (última semana) com a de 30d (período fechado, mais estável). Se as
-   duas apontam na MESMA direção, a tendência está consolidada — diga isso com confiança. Se a
-   última semana anda na direção OPOSTA à do período de 30d (ex.: CAC caiu no mês mas subiu na
-   última semana), o resultado ainda está se firmando — diga isso explicitamente ("ainda em
-   evolução", "vamos acompanhar") em vez de tratar um dos dois números como veredito final. Isso
-   não é hedge: é reportar com precisão que o dado ainda não fechou uma direção.
-6. A conta está saudável, estagnada ou em deterioração? Qual é O problema (ou A oportunidade)
-   número 1 desta conta agora — response a essa pergunta deve vir do gargalo mais forte
-   encontrado nos passos 1-3, não de um template fixo.
-- Cruze sinais que uma tabela não cruza: canais divergindo no mesmo partner (demanda existe, canal
-  falha?); etapas contando histórias contraditórias; pct_cashback vs segmentação geográfica;
-  pré-clique vs meio de funil; eficiência relativa vs os outros partners no mesmo canal.
-- Formule hipóteses de causa raiz e rotule como [hipótese], dizendo como validar cada uma.
-- Se esta conta fosse sua, o que você mudaria ESTA semana?
-
-Padrões de diagnóstico úteis:
-- impressões caindo + CTR estável = perda de entrega (orçamento/lance/leilão); CTR caindo +
-  impressões estáveis = fadiga de criativo ou concorrente novo; impressões subindo + CTR caindo
-  sem ganho de cliques = segmentação aberta demais; CPC subindo + CTR estável = leilão mais caro.
-- google: cliques ok + sessões baixas = landing/tracking; sessões>clickoff fraca = oferta pouco
-  competitiva; clickoff>redirect fraca = cobertura/viabilidade; redirect>lead fraca = fricção de
-  formulário/aceite.
-- meta: cliques>chat_start fraca = criativo/CTA ou fricção do click-to-WhatsApp; chat_start>
-  zip_search fraca = abandono no início do bot; zip_search>redirect fraca = CEPs fora da cobertura
-  (segmentação geográfica); redirect>lead fraca = fricção final do fluxo.
-- pct_cashback subindo ACOMPANHADO de CPL ruim ou volume baixo de leads = segmentação vendendo
-  demanda que não converte pro anunciante; pct_cashback alto isolado, com CPL na meta, é cobertura
-  saudável, não desalinhamento.
-- lead>venda fraca = operação comercial do provedor, não mídia — ação é acionar o responsável.
-</como_pensar>
-
-<o_que_nao_fazer>
-- NÃO recite variações numéricas ("leads +28%, CPL R$ 62 (-18%), CAC +5%..."). O dashboard mostra
-  isso melhor que você. LIMITE DURO: no máximo 3 números por parecer, no máximo 1 casa decimal
-  cada. Se o rascunho interno tem mais de 3, corte os mais fracos antes de escrever a versão final.
-- NÃO escreva frase que não contenha diagnóstico, hipótese, risco, oportunidade ou decisão. Teste:
-  se a frase não muda nenhuma decisão do leitor, corte.
-- NÃO use a mesma estrutura mecânica para todos os partners — template preenchido é relatório morto.
-  Cada parecer segue a história daquela conta. Teste concreto: releia os 8 pareceres antes de
-  finalizar — se mais de 2 deles abrem citando cashback ou CTR/CPC como primeiro sinal, você
-  ignorou gargalo_funil_30d e está caindo no padrão fácil. Reescreva puxando o gargalo de funil
-  (ou outro sinal) como abertura desses casos.
-- NÃO subdivida cada partner em "Google:" / "Meta:" com lista de métricas; canal entra na narrativa
-  quando for relevante para o diagnóstico.
-- NÃO hedge quando o sinal é claro ("pode ser interessante avaliar..."). Posicione-se: "faça X
-  porque Y". Exceção real (não é hedge, é honestidade com o dado): quando 7d e 30d apontam em
-  direções opostas (ver <como_pensar>), diga que o resultado está em evolução e a ação da semana
-  pode ser "acompanhar mais uma semana antes de mudar algo" — isso é uma posição, não uma fuga.
-- NÃO comente crédito, saldo ou runway do pacote — já existem alertas dedicados a isso. Escopo
-  deste relatório: performance de campanha e gargalos de funil, só.
-- NÃO ultrapasse 5 frases por parecer de partner. Limite duro.
-- NÃO contradiga triagem.por_partner[partner].status_geral. Uma conta marcada "ok" não pode ganhar
-  tom de alarme (nem virar recomendação de "não aumentar verba"/"parar tudo"); uma conta marcada
-  "alarme" não pode ser descrita como "estável" ou "consolidando alta". Cashback alto sozinho
-  numa conta com status "ok" nunca é motivo pra tom de alarme — é cobertura, releia
-  <contexto_negocio>.
-</o_que_nao_fazer>
-
-<regua_de_qualidade>
-RUIM (relata — valor zero): "Loga Google: 28 leads (+28% vs 7d ant.), CPL R$ 62 (-18%), CAC R$ 270.
-No Meta, 38 cliques, CTR 0,9% (-25%), 14 conversas iniciadas."
-BOM (analisa, enxuto — é isso que se espera): "Loga é a conta mais saudável do portfólio e está
-subaproveitada: converte sessão em lead acima da média e o CAC 30d caiu sem verba nova — escalar
-orçamento no Google. Freio no Meta: CTR 0,9% com impressões estáveis há 6 semanas indica criativo
-fatigado [hipótese — checar data da última troca]. Rotacionar criativo antes de cortar verba."
-BOM (tendência ainda em evolução, não veredito falso): "Direct manteve CAC abaixo do período
-fechado, mas o resultado não estabilizou: subiu de novo essa semana, puxado por um salto forte no
-Google. A taxa de lead virando venda continua fraca — de 20 leads no mês, só 3 venderam [hipótese —
-os planos do provedor vêm ficando mais caros, o que pode estar barrando o fechamento; validar com
-o comercial]. Vamos acompanhar mais uma semana antes de realocar verba entre os canais."
-</regua_de_qualidade>
-
-<tarefa>
-Analise os dados JSON abaixo (data de corte: {cover}) raciocinando passo a passo internamente
-antes de escrever. Produza:
-
-1. LEITURA DO PORTFÓLIO — 1 parágrafo curto: onde o MP Agência ganha e perde dinheiro hoje, qual
-   conta exige ação urgente e por quê, e a decisão mais importante da semana (30d vs 30d_prev e
-   série semanal separam tendência de ruído).
-2. PARECER POR PARTNER — para CADA um dos 8 partners, um parecer de 3 a 5 frases: situação em uma
-   frase; diagnóstico do que explica a performance, começando por gargalo_funil_30d (a etapa mais
-   fraca já identificada) e só recorrendo a pré-clique (ctr_pct/cpc_estimado) ou cashback quando
-   fizerem mais sentido pro caso; use tendencia_semanal_por_partner pra ancorar tendência vs
-   ruído; hipótese de causa raiz rotulada [hipótese] com forma de validação; ação da semana.
-   Partner sem investimento/atividade = 1 linha dizendo isso e o que verificar. Nunca omita um
-   partner.
-3. RECOMENDAÇÕES PARA A EQUIPE DE MÍDIA — 3 a 6 ações concretas, priorizadas por impacto,
-   cada uma com partner, canal, ação específica, justificativa (com os números que a sustentam),
-   impacto esperado e rótulo [confiança alta] ou [confiança média].
-</tarefa>
-
-<formato_de_saida>
-Responda SOMENTE com JSON válido, sem markdown em volta:
-{{
-  "resumo_slack": "resumo em até 600 caracteres, SÓ os pontos críticos da semana — pra quem vai ler batendo o olho no celular. Formato mrkdwn do Slack (*negrito*, bullets com •), SEM NENHUM EMOJI (nem no texto nem como marcador de bullet). NÃO mencione contas saudáveis, estáveis ou 'indo bem' — se a conta está em status ok da triagem, ela simplesmente não entra aqui. Inclua só: contas em alarme/atenção/risco de churn (com o motivo em poucas palavras) e a ação nº1 da semana. Se NENHUMA conta estiver em alarme ou atenção, diga isso em 1 frase curta e pare — não force um problema que não existe.",
-  "relatorio_html": "corpo HTML do relatório (apenas h2, h3, p, ul, li, strong, table/thead/tbody/tr/th/td). Seções: Leitura do Portfólio; Parecer por Partner (um h3 por partner); Recomendações (tabela com colunas Prioridade, Partner, Canal, Ação, Justificativa, Impacto esperado, Confiança). Valores em R$ sem centavos. SEM emojis em nenhum lugar."
-}}
-Tom: analista de mídia falando com o próprio time — direto, opinativo, específico, do jeito que se
-fala sobre uma conta que você acompanha toda semana (não como consultoria externa avaliando de
-fora). Está tudo bem dizer "vamos acompanhar" quando o dado ainda não fechou uma direção — isso é
-precisão, não é hedge. Estilo enxuto: frases curtas, sem preâmbulos ("vale destacar que", "é
-importante notar"), sem adjetivo que não carrega informação, sem repetir o que outra seção já
-disse. Se dá para dizer em 8 palavras, não use 20. Nunca use emoji, em nenhum campo da resposta.
-Português do Brasil.
-</formato_de_saida>
-
-DADOS:
-{payload}
-"""
-
-
-def build_prompt(payload, cover):
-    return PROMPT_TEMPLATE.format(
-        cover=cover,
-        payload=json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
-    )
-
-
-# ── LLM providers ─────────────────────────────────────────────────────────
-
-def provider_info():
-    provider = (os.environ.get("LLM_PROVIDER") or "gemini").strip().lower()
-    if provider not in DEFAULT_MODELS:
-        raise RuntimeError(f"LLM_PROVIDER desconhecido: {provider!r} (use gemini|openai|anthropic)")
-    model = (os.environ.get("LLM_MODEL") or "").strip() or DEFAULT_MODELS[provider]
-    return provider, model
-
-
-def call_llm(prompt, model_override=None):
-    provider, model = provider_info()
-    if model_override:
-        model = model_override
-    key = os.environ["LLM_API_KEY"]
-
-    if provider == "gemini":
-        resp = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
-            headers={"x-goog-api-key": key},
-            json={
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {
-                    "temperature": 0.4,
-                    # relatório de 8 partners × 2 canais é longo, e nos Gemini 2.5 os
-                    # tokens de thinking também descontam daqui — 16384 truncava o JSON.
-                    "maxOutputTokens": 65536,
-                    "responseMimeType": "application/json",
-                },
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        parts = resp.json()["candidates"][0]["content"]["parts"]
-        return "".join(p.get("text", "") for p in parts)
-
-    if provider == "openai":
-        resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
-            json={
-                "model": model,
-                "temperature": 0.4,
-                "response_format": {"type": "json_object"},
-                "messages": [{"role": "user", "content": prompt}],
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
-
-    # anthropic
-    resp = requests.post(
-        "https://api.anthropic.com/v1/messages",
-        headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
-        json={
-            "model": model,
-            "max_tokens": 16384,
-            "temperature": 0.4,
-            "messages": [{"role": "user", "content": prompt}],
-        },
-        timeout=REQUEST_TIMEOUT,
-    )
-    resp.raise_for_status()
-    return "".join(b.get("text", "") for b in resp.json()["content"])
-
-
-# faixas unicode de emoji/pictograma — removidos por código em vez de só pedir
-# ao LLM, porque o modelo ignora a instrução de vez em quando (visto em produção).
-EMOJI_RE = re.compile(
-    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF"
-    "\U00002700-\U000027BF\U0001F900-\U0001F9FF\U00002B00-\U00002BFF"
-    "\U0000FE0F\U0000200D]+")
-
-
-def _strip_emoji(text):
-    return EMOJI_RE.sub("", text)
-
-
-def parse_response(text):
-    text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip())
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end <= start:
-        raise RuntimeError(f"Resposta do LLM sem JSON reconhecível (truncada?): "
-                           f"{len(text)} chars, início: {text[:200]!r}")
-    data = json.loads(text[start:end + 1])
-    for field in ("resumo_slack", "relatorio_html"):
-        if not isinstance(data.get(field), str) or not data[field].strip():
-            raise RuntimeError(f"Resposta do LLM sem campo {field!r}")
-    # nunca deixar o LLM injetar script/style na página publicada
-    data["relatorio_html"] = re.sub(
-        r"<\s*/?\s*(script|style|iframe|link|meta)\b[^>]*>", "", data["relatorio_html"], flags=re.I)
-    data["resumo_slack"] = _strip_emoji(data["resumo_slack"]).strip()
-    data["relatorio_html"] = _strip_emoji(data["relatorio_html"])
-    return data
-
-
-RETRYABLE_STATUS = {429, 500, 502, 503, 529}
-
-
-def generate(payload, cover):
-    """Chama o LLM com retry e fallback de modelo.
-
-    Ordem: modelo configurado (2 tentativas, pausa entre elas) e, se ele seguir
-    indisponível (ex.: 429 por modelo fora do free tier), o default do provedor.
-    Erros não-transientes (4xx de auth/payload) estouram na hora.
-    """
-    prompt = build_prompt(payload, cover)
-    provider, model = provider_info()
-    attempts = [model, model]
-    if model != DEFAULT_MODELS[provider]:
-        attempts.append(DEFAULT_MODELS[provider])
-    last_err = None
-    for i, m in enumerate(attempts):
-        if i:
-            time.sleep(45)
-        try:
-            data = parse_response(call_llm(prompt, model_override=m))
-            data["_model"] = m
-            return data
-        except requests.HTTPError as e:
-            status = e.response.status_code if e.response is not None else None
-            if status not in RETRYABLE_STATUS:
-                raise
-            print(f"Aviso: {provider}/{m} retornou {status}; "
-                  f"{'tentando fallback' if i + 1 < len(attempts) else 'sem mais opções'}.")
-            last_err = e
-    raise last_err
-
-
-# ── página publicada ──────────────────────────────────────────────────────
 
 PAGE_TEMPLATE = """<!doctype html>
 <html lang="pt-BR">
@@ -1041,8 +1633,9 @@ PAGE_TEMPLATE = """<!doctype html>
     <h1>Análise IA — Funil Ads-to-Sale MP Agência</h1>
     <p>Snapshot de {cover} · gerada automaticamente no refresh semanal · <a href="index.html?v={cutoff}">← voltar ao dashboard</a></p>
   </header>
-  <div class="aviso">Relatório gerado por IA ({provider}/{model}) a partir dos dados do dashboard.
-  Valide os números no dashboard antes de executar mudanças nas campanhas.</div>
+  <div class="aviso">Relatório gerado por IA (gemini/{model}) a partir dos dados do dashboard.
+  Todo número citado é validado contra a lista de evidências do diagnóstico (estágio 1), mas
+  confira no dashboard antes de mexer em campanha.</div>
   <main>
 {body}
   </main>
@@ -1053,8 +1646,7 @@ PAGE_TEMPLATE = """<!doctype html>
 """
 
 
-def render_page(relatorio_html, cover, cutoff, model=None):
-    provider, configured = provider_info()
+def render_page(result, cover, cutoff):
     return PAGE_TEMPLATE.format(
-        cover=cover, cutoff=cutoff, provider=provider, model=model or configured,
-        body=relatorio_html)
+        cover=cover, cutoff=cutoff, model=result.get("modelo") or _model(),
+        body=render_report_body(result))

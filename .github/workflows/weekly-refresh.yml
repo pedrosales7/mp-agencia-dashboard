@@ -44,8 +44,9 @@ jobs:
           SLACK_MENTION_ON_ERROR: '<@U0753LAQU1F>'
           # Análise IA (opcional): sem LLM_API_KEY o passo é pulado sem erro.
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }} # gemini (default) | openai | anthropic
-          LLM_MODEL: ${{ vars.LLM_MODEL }}       # opcional, default por provedor
+          # pipeline de 3 estágios é Gemini-only (usa responseSchema/thinkingConfig) —
+          # LLM_PROVIDER não se aplica mais (ver docstring de scripts/ai_analysis.py)
+          LLM_MODEL: ${{ vars.LLM_MODEL }}       # opcional, default gemini-3.1-pro-preview
         run: python scripts/weekly_refresh.py
 
       - name: Commit updated dashboard
@@ -54,6 +55,8 @@ jobs:
           git config user.name "mp-agencia-bot"
           git config user.email "actions@github.com"
           git add docs data/cache/historical_data.json
+          # data/diagnosticos só existe a partir da 1ª semana com LLM_API_KEY configurado
+          if [ -d data/diagnosticos ]; then git add data/diagnosticos; fi
           if git diff --cached --quiet; then
             echo "no_changes=true" >> "$GITHUB_OUTPUT"
             echo "Nada a commitar."

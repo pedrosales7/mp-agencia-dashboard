@@ -561,29 +561,28 @@ def main():
     print(f"OK snap={len(full_snapshot)}rows fg={len(full_fg)}rows fm={len(full_fm)}rows "
           f"daily_compact={len(daily_compact)}rows html={len(html)//1024}KB")
 
-    # ── triagem + CAC (código, não LLM — roda sempre, mesmo sem LLM_API_KEY) ──
+    # ── contexto da IA (payload + triagem, puro cálculo — roda sempre, mesmo
+    # sem LLM_API_KEY) ─────────────────────────────────────────────────────
 
-    payload = ai_analysis.build_payload(
+    context = ai_analysis.build_context(
         all_daily, all_dfg, all_dfm, cutoff_dt, VALID_PARTNERS)
-    triagem = ai_analysis.triar(payload)
-    payload["triagem"] = triagem
-    cac_thread_text = ai_analysis.render_cac_slack(payload)
+    cac_thread_text = ai_analysis.render_cac_slack(context)
 
-    # ── análise IA (opcional — nunca derruba o refresh) ──────────────────
+    # ── análise IA — pipeline de 3 estágios (opcional — nunca derruba o refresh) ──
 
     analysis_block = ""
     if ai_analysis.enabled():
         try:
-            result = ai_analysis.generate(payload, cover)
-            body = ai_analysis.render_triagem_html(triagem) + result["relatorio_html"]
+            result = ai_analysis.run(context, cutoff_dt, REPO_ROOT)
             with open(ANALYSIS_PATH, "w", encoding="utf-8") as f:
-                f.write(ai_analysis.render_page(body, cover, cutoff,
-                                                model=result.get("_model")))
+                f.write(ai_analysis.render_page(result, cover, cutoff))
+            if result["avisos"]:
+                print("Avisos da análise: " + " · ".join(result["avisos"]))
             analysis_url = (f"{PAGES_URL.rstrip('/')}/analise.html?v={cutoff}"
                             if PAGES_URL else "analise.html")
-            analysis_block = (f"\n*Pontos críticos da semana:*\n{result['resumo_slack']}\n"
+            analysis_block = (f"\n*Pontos críticos da semana:*\n{result['blocos']['resumo_slack']}\n"
                               f"Relatório completo: {analysis_url}\n")
-            print(f"Análise IA ok ({len(result['relatorio_html'])//1024}KB de relatório).")
+            print(f"Análise IA ok ({len(result['blocos']['pareceres'])//1024}KB de pareceres).")
         except Exception as e:
             print(f"Aviso: análise IA falhou ({type(e).__name__}: {e}) — refresh segue sem ela.",
                   file=sys.stderr)
