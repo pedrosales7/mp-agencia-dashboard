@@ -301,25 +301,23 @@ clicks AS (
     GROUP BY 1
 ),
 partner_ids AS (
-    -- Tabela estática partnership_id <-> id_mp. Só precisa de linha nova quando
-    -- entra partner novo de verdade no MP Agência (evento raro, feito junto com
-    -- o cadastro no backoffice) — NÃO quando um label muda de formato.
-    SELECT '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
-    SELECT 'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                   UNION ALL
-    SELECT '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                   UNION ALL
-    SELECT '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                      UNION ALL
-    SELECT '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                          UNION ALL
-    SELECT 'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                             UNION ALL
-    SELECT '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                     UNION ALL
-    SELECT '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+    -- Dinâmico (não mais lista hardcoded): todo partner com investimento
+    -- registrado já aparece aqui automaticamente — não precisa editar SQL
+    -- quando entra partner novo, só precisa estar configurado no backoffice
+    -- (já é feito no onboarding pra qualquer partner rodar campanha).
+    -- MAX(id_mp) é defensivo p/ eventual grafia divergente do mesmo partnership_id.
+    SELECT partnership_id, MAX(id_mp) AS id_mp
+    FROM midia_paga.performance_partner_mp_agency
+    WHERE date >= current_date - INTERVAL '180 day'
+    GROUP BY 1
 ),
 labels_seen AS (
     -- CHANGELOG 2026-07-29: label_map deixou de ser lista hardcoded de agent_label.
     -- Bug real: Interplus trocou de `mpa.interplus internet` pra
     -- `mpa.interplus internet@interplus internet` em 24/07 e o funil Meta zerou
-    -- até alguém notar e editar a lista na mão. Agora qualquer variante observada
-    -- `mpa.<slug>` (padrão antigo) ou `mpa.<slug>@<partner recebedor>` (padrão novo)
-    -- resolve sozinha em label_map, casando <slug> normalizado com partner_ids.id_mp.
+    -- até alguém notar e editar a lista na mão. Agora qualquer label visto nos
+    -- eventos — formato antigo `mpa.<slug>` ou novo `mpa.<slug>@<algo>` — resolve
+    -- sozinho contra partner_ids, casando o <slug> normalizado (antes do '@').
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_chat_start WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
     UNION
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_zip_search WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
@@ -329,8 +327,10 @@ labels_seen AS (
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_redirect WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
 ),
 label_map AS (
-    -- Atribuição sempre pelo anunciante: usa só o slug ANTES do '@' (ignora o
-    -- partner recebedor no padrão novo), igual regra já aplicada em redirects/cashback.
+    -- Usa só o slug ANTES do '@'. Motivo real: é a parte estável (id_mp do
+    -- anunciante); o que vem depois do '@' já mudou de formato uma vez (Interplus)
+    -- e não é usado em nenhum lugar do funil pra decidir atribuição — quem decide
+    -- recebedor/cashback de fato é `plan_provider` em wa_redirect, não o label.
     SELECT DISTINCT
         p.id_mp AS id_mp_canon,
         p.partnership_id,
@@ -487,25 +487,23 @@ config_m AS (
     WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
 ),
 partner_ids AS (
-    -- Tabela estática partnership_id <-> id_mp. Só precisa de linha nova quando
-    -- entra partner novo de verdade no MP Agência (evento raro, feito junto com
-    -- o cadastro no backoffice) — NÃO quando um label muda de formato.
-    SELECT '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
-    SELECT 'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                   UNION ALL
-    SELECT '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                   UNION ALL
-    SELECT '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                      UNION ALL
-    SELECT '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                          UNION ALL
-    SELECT 'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                             UNION ALL
-    SELECT '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                     UNION ALL
-    SELECT '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+    -- Dinâmico (não mais lista hardcoded): todo partner com investimento
+    -- registrado já aparece aqui automaticamente — não precisa editar SQL
+    -- quando entra partner novo, só precisa estar configurado no backoffice
+    -- (já é feito no onboarding pra qualquer partner rodar campanha).
+    -- MAX(id_mp) é defensivo p/ eventual grafia divergente do mesmo partnership_id.
+    SELECT partnership_id, MAX(id_mp) AS id_mp
+    FROM midia_paga.performance_partner_mp_agency
+    WHERE date >= current_date - INTERVAL '180 day'
+    GROUP BY 1
 ),
 labels_seen AS (
     -- CHANGELOG 2026-07-29: label_map deixou de ser lista hardcoded de agent_label.
     -- Bug real: Interplus trocou de `mpa.interplus internet` pra
     -- `mpa.interplus internet@interplus internet` em 24/07 e o funil Meta zerou
-    -- até alguém notar e editar a lista na mão. Agora qualquer variante observada
-    -- `mpa.<slug>` (padrão antigo) ou `mpa.<slug>@<partner recebedor>` (padrão novo)
-    -- resolve sozinha em label_map, casando <slug> normalizado com partner_ids.id_mp.
+    -- até alguém notar e editar a lista na mão. Agora qualquer label visto nos
+    -- eventos — formato antigo `mpa.<slug>` ou novo `mpa.<slug>@<algo>` — resolve
+    -- sozinho contra partner_ids, casando o <slug> normalizado (antes do '@').
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_chat_start WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
     UNION
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_zip_search WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
@@ -515,8 +513,10 @@ labels_seen AS (
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_redirect WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
 ),
 label_map AS (
-    -- Atribuição sempre pelo anunciante: usa só o slug ANTES do '@' (ignora o
-    -- partner recebedor no padrão novo), igual regra já aplicada em redirects/cashback.
+    -- Usa só o slug ANTES do '@'. Motivo real: é a parte estável (id_mp do
+    -- anunciante); o que vem depois do '@' já mudou de formato uma vez (Interplus)
+    -- e não é usado em nenhum lugar do funil pra decidir atribuição — quem decide
+    -- recebedor/cashback de fato é `plan_provider` em wa_redirect, não o label.
     SELECT DISTINCT
         p.id_mp AS id_mp_canon,
         p.partnership_id,
@@ -802,25 +802,23 @@ clicks AS (
     GROUP BY 1, 2
 ),
 partner_ids AS (
-    -- Tabela estática partnership_id <-> id_mp. Só precisa de linha nova quando
-    -- entra partner novo de verdade no MP Agência (evento raro, feito junto com
-    -- o cadastro no backoffice) — NÃO quando um label muda de formato.
-    SELECT '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
-    SELECT 'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                   UNION ALL
-    SELECT '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                   UNION ALL
-    SELECT '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                      UNION ALL
-    SELECT '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                          UNION ALL
-    SELECT 'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                             UNION ALL
-    SELECT '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                     UNION ALL
-    SELECT '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+    -- Dinâmico (não mais lista hardcoded): todo partner com investimento
+    -- registrado já aparece aqui automaticamente — não precisa editar SQL
+    -- quando entra partner novo, só precisa estar configurado no backoffice
+    -- (já é feito no onboarding pra qualquer partner rodar campanha).
+    -- MAX(id_mp) é defensivo p/ eventual grafia divergente do mesmo partnership_id.
+    SELECT partnership_id, MAX(id_mp) AS id_mp
+    FROM midia_paga.performance_partner_mp_agency
+    WHERE date >= current_date - INTERVAL '180 day'
+    GROUP BY 1
 ),
 labels_seen AS (
     -- CHANGELOG 2026-07-29: label_map deixou de ser lista hardcoded de agent_label.
     -- Bug real: Interplus trocou de `mpa.interplus internet` pra
     -- `mpa.interplus internet@interplus internet` em 24/07 e o funil Meta zerou
-    -- até alguém notar e editar a lista na mão. Agora qualquer variante observada
-    -- `mpa.<slug>` (padrão antigo) ou `mpa.<slug>@<partner recebedor>` (padrão novo)
-    -- resolve sozinha em label_map, casando <slug> normalizado com partner_ids.id_mp.
+    -- até alguém notar e editar a lista na mão. Agora qualquer label visto nos
+    -- eventos — formato antigo `mpa.<slug>` ou novo `mpa.<slug>@<algo>` — resolve
+    -- sozinho contra partner_ids, casando o <slug> normalizado (antes do '@').
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_chat_start WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
     UNION
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_zip_search WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
@@ -830,8 +828,10 @@ labels_seen AS (
     SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_redirect WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
 ),
 label_map AS (
-    -- Atribuição sempre pelo anunciante: usa só o slug ANTES do '@' (ignora o
-    -- partner recebedor no padrão novo), igual regra já aplicada em redirects/cashback.
+    -- Usa só o slug ANTES do '@'. Motivo real: é a parte estável (id_mp do
+    -- anunciante); o que vem depois do '@' já mudou de formato uma vez (Interplus)
+    -- e não é usado em nenhum lugar do funil pra decidir atribuição — quem decide
+    -- recebedor/cashback de fato é `plan_provider` em wa_redirect, não o label.
     SELECT DISTINCT
         p.id_mp AS id_mp_canon,
         p.partnership_id,
