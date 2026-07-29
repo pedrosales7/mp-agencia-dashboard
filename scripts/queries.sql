@@ -300,22 +300,46 @@ clicks AS (
     JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
     GROUP BY 1
 ),
+partner_ids AS (
+    -- Tabela estática partnership_id <-> id_mp. Só precisa de linha nova quando
+    -- entra partner novo de verdade no MP Agência (evento raro, feito junto com
+    -- o cadastro no backoffice) — NÃO quando um label muda de formato.
+    SELECT '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
+    SELECT 'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                   UNION ALL
+    SELECT '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                   UNION ALL
+    SELECT '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                      UNION ALL
+    SELECT '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                          UNION ALL
+    SELECT 'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                             UNION ALL
+    SELECT '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                     UNION ALL
+    SELECT '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+),
+labels_seen AS (
+    -- CHANGELOG 2026-07-29: label_map deixou de ser lista hardcoded de agent_label.
+    -- Bug real: Interplus trocou de `mpa.interplus internet` pra
+    -- `mpa.interplus internet@interplus internet` em 24/07 e o funil Meta zerou
+    -- até alguém notar e editar a lista na mão. Agora qualquer variante observada
+    -- `mpa.<slug>` (padrão antigo) ou `mpa.<slug>@<partner recebedor>` (padrão novo)
+    -- resolve sozinha em label_map, casando <slug> normalizado com partner_ids.id_mp.
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_chat_start WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_zip_search WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_get_plans WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_redirect WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+),
 label_map AS (
-    SELECT DISTINCT id_mp AS id_mp_canon, partnership_id, agent_label FROM (
-        SELECT 'mpa.loga-internet'                       AS agent_label, '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
-        SELECT 'mpa.loga-internet@loga-internet',                       '011f62ae-d224-4569-9697-542f959685b2', 'loga-internet'                          UNION ALL
-        SELECT 'mpa.the-fiber-internet',                                'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
-        SELECT 'mpa.the fiber internet@the fiber internet',             'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
-        SELECT 'mpa.interplus internet',                                '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
-        SELECT 'mpa.interplus internet@interplus internet',              '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
-        SELECT 'mpa.direct-internet',                                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
-        SELECT 'mpa.direct internet@direct internet',                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
-        SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
-        SELECT 'mpa.unifique',                                          'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                               UNION ALL
-        SELECT 'mpa.ultranet-network@ultranet-network',                 '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                       UNION ALL
-        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'                           UNION ALL
-        SELECT 'mpa.ativa-telecom@ativa-telecom',                       '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
-    ) x
+    -- Atribuição sempre pelo anunciante: usa só o slug ANTES do '@' (ignora o
+    -- partner recebedor no padrão novo), igual regra já aplicada em redirects/cashback.
+    SELECT DISTINCT
+        p.id_mp AS id_mp_canon,
+        p.partnership_id,
+        ls.referral_agent_label AS agent_label
+    FROM labels_seen ls
+    JOIN partner_ids p
+      ON LOWER(REPLACE(p.id_mp, '-', ' '))
+       = LOWER(REPLACE(SPLIT_PART(SPLIT_PART(ls.referral_agent_label, 'mpa.', 2), '@', 1), '-', ' '))
+    WHERE ls.referral_agent_label NOT LIKE 'mpa.desktop%'
 ),
 base AS (SELECT DISTINCT id_mp_canon, partnership_id FROM label_map),
 invest_por_partner AS (
@@ -462,22 +486,46 @@ config_m AS (
     FROM backoffice.db_backoffice_lead_agency_paid_media_config
     WHERE utm_source IN ('meta','whatsapp') AND campaign_name IS NOT NULL AND campaign_name <> ''
 ),
+partner_ids AS (
+    -- Tabela estática partnership_id <-> id_mp. Só precisa de linha nova quando
+    -- entra partner novo de verdade no MP Agência (evento raro, feito junto com
+    -- o cadastro no backoffice) — NÃO quando um label muda de formato.
+    SELECT '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
+    SELECT 'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                   UNION ALL
+    SELECT '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                   UNION ALL
+    SELECT '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                      UNION ALL
+    SELECT '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                          UNION ALL
+    SELECT 'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                             UNION ALL
+    SELECT '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                     UNION ALL
+    SELECT '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+),
+labels_seen AS (
+    -- CHANGELOG 2026-07-29: label_map deixou de ser lista hardcoded de agent_label.
+    -- Bug real: Interplus trocou de `mpa.interplus internet` pra
+    -- `mpa.interplus internet@interplus internet` em 24/07 e o funil Meta zerou
+    -- até alguém notar e editar a lista na mão. Agora qualquer variante observada
+    -- `mpa.<slug>` (padrão antigo) ou `mpa.<slug>@<partner recebedor>` (padrão novo)
+    -- resolve sozinha em label_map, casando <slug> normalizado com partner_ids.id_mp.
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_chat_start WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_zip_search WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_get_plans WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_redirect WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+),
 label_map AS (
-    SELECT DISTINCT id_mp AS id_mp_canon, partnership_id, agent_label FROM (
-        SELECT 'mpa.loga-internet'                       AS agent_label, '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
-        SELECT 'mpa.loga-internet@loga-internet',                       '011f62ae-d224-4569-9697-542f959685b2', 'loga-internet'                          UNION ALL
-        SELECT 'mpa.the-fiber-internet',                                'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
-        SELECT 'mpa.the fiber internet@the fiber internet',             'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
-        SELECT 'mpa.interplus internet',                                '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
-        SELECT 'mpa.interplus internet@interplus internet',              '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
-        SELECT 'mpa.direct-internet',                                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
-        SELECT 'mpa.direct internet@direct internet',                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
-        SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
-        SELECT 'mpa.unifique',                                          'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                               UNION ALL
-        SELECT 'mpa.ultranet-network@ultranet-network',                 '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                       UNION ALL
-        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'                           UNION ALL
-        SELECT 'mpa.ativa-telecom@ativa-telecom',                       '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
-    ) x
+    -- Atribuição sempre pelo anunciante: usa só o slug ANTES do '@' (ignora o
+    -- partner recebedor no padrão novo), igual regra já aplicada em redirects/cashback.
+    SELECT DISTINCT
+        p.id_mp AS id_mp_canon,
+        p.partnership_id,
+        ls.referral_agent_label AS agent_label
+    FROM labels_seen ls
+    JOIN partner_ids p
+      ON LOWER(REPLACE(p.id_mp, '-', ' '))
+       = LOWER(REPLACE(SPLIT_PART(SPLIT_PART(ls.referral_agent_label, 'mpa.', 2), '@', 1), '-', ' '))
+    WHERE ls.referral_agent_label NOT LIKE 'mpa.desktop%'
 ),
 cliques_g AS (
     SELECT DATE_TRUNC('week', g.date)::date AS semana, p.id_mp, SUM(g.clicks) AS cliques_g
@@ -753,22 +801,46 @@ clicks AS (
     JOIN periodo ON f.date::date BETWEEN periodo.d_ini AND periodo.d_fim
     GROUP BY 1, 2
 ),
+partner_ids AS (
+    -- Tabela estática partnership_id <-> id_mp. Só precisa de linha nova quando
+    -- entra partner novo de verdade no MP Agência (evento raro, feito junto com
+    -- o cadastro no backoffice) — NÃO quando um label muda de formato.
+    SELECT '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
+    SELECT 'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                   UNION ALL
+    SELECT '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                   UNION ALL
+    SELECT '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                      UNION ALL
+    SELECT '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                          UNION ALL
+    SELECT 'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                             UNION ALL
+    SELECT '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                     UNION ALL
+    SELECT '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
+),
+labels_seen AS (
+    -- CHANGELOG 2026-07-29: label_map deixou de ser lista hardcoded de agent_label.
+    -- Bug real: Interplus trocou de `mpa.interplus internet` pra
+    -- `mpa.interplus internet@interplus internet` em 24/07 e o funil Meta zerou
+    -- até alguém notar e editar a lista na mão. Agora qualquer variante observada
+    -- `mpa.<slug>` (padrão antigo) ou `mpa.<slug>@<partner recebedor>` (padrão novo)
+    -- resolve sozinha em label_map, casando <slug> normalizado com partner_ids.id_mp.
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_chat_start WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_zip_search WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_get_plans WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+    UNION
+    SELECT DISTINCT referral_agent_label FROM whatsapp_assistant.wa_redirect WHERE referral_agent_label LIKE 'mpa.%' AND _timestamp >= current_date - INTERVAL '120 day'
+),
 label_map AS (
-    SELECT DISTINCT id_mp AS id_mp_canon, partnership_id, agent_label FROM (
-        SELECT 'mpa.loga-internet'                       AS agent_label, '011f62ae-d224-4569-9697-542f959685b2' AS partnership_id, 'loga-internet'      AS id_mp UNION ALL
-        SELECT 'mpa.loga-internet@loga-internet',                       '011f62ae-d224-4569-9697-542f959685b2', 'loga-internet'                          UNION ALL
-        SELECT 'mpa.the-fiber-internet',                                'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
-        SELECT 'mpa.the fiber internet@the fiber internet',             'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
-        SELECT 'mpa.interplus internet',                                '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
-        SELECT 'mpa.interplus internet@interplus internet',              '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
-        SELECT 'mpa.direct-internet',                                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
-        SELECT 'mpa.direct internet@direct internet',                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
-        SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
-        SELECT 'mpa.unifique',                                          'dbacdf0e-de80-4c74-a92e-3369a4cb27fd', 'unifique'                               UNION ALL
-        SELECT 'mpa.ultranet-network@ultranet-network',                 '964662ae-9d9c-466b-881d-373e832c785f', 'ultranet-network'                       UNION ALL
-        SELECT 'mpa.ativa-telecom',                                     '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'                           UNION ALL
-        SELECT 'mpa.ativa-telecom@ativa-telecom',                       '13dc5cc1-1ad6-45fe-8669-06126d622af6', 'ativa-telecom'
-    ) x
+    -- Atribuição sempre pelo anunciante: usa só o slug ANTES do '@' (ignora o
+    -- partner recebedor no padrão novo), igual regra já aplicada em redirects/cashback.
+    SELECT DISTINCT
+        p.id_mp AS id_mp_canon,
+        p.partnership_id,
+        ls.referral_agent_label AS agent_label
+    FROM labels_seen ls
+    JOIN partner_ids p
+      ON LOWER(REPLACE(p.id_mp, '-', ' '))
+       = LOWER(REPLACE(SPLIT_PART(SPLIT_PART(ls.referral_agent_label, 'mpa.', 2), '@', 1), '-', ' '))
+    WHERE ls.referral_agent_label NOT LIKE 'mpa.desktop%'
 ),
 chat_start AS (
     SELECT m.partnership_id, (c._timestamp - INTERVAL '3 hours')::date AS dia, COUNT(*) AS conversas
