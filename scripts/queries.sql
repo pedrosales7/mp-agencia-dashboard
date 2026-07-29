@@ -307,6 +307,7 @@ label_map AS (
         SELECT 'mpa.the-fiber-internet',                                'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
         SELECT 'mpa.the fiber internet@the fiber internet',             'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
         SELECT 'mpa.interplus internet',                                '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
+        SELECT 'mpa.interplus internet@interplus internet',              '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
         SELECT 'mpa.direct-internet',                                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
         SELECT 'mpa.direct internet@direct internet',                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
         SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
@@ -468,6 +469,7 @@ label_map AS (
         SELECT 'mpa.the-fiber-internet',                                'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
         SELECT 'mpa.the fiber internet@the fiber internet',             'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
         SELECT 'mpa.interplus internet',                                '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
+        SELECT 'mpa.interplus internet@interplus internet',              '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
         SELECT 'mpa.direct-internet',                                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
         SELECT 'mpa.direct internet@direct internet',                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
         SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
@@ -758,6 +760,7 @@ label_map AS (
         SELECT 'mpa.the-fiber-internet',                                'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
         SELECT 'mpa.the fiber internet@the fiber internet',             'b0e1598d-b699-45f9-9fdf-4252b8453bf1', 'the fiber internet'                     UNION ALL
         SELECT 'mpa.interplus internet',                                '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
+        SELECT 'mpa.interplus internet@interplus internet',              '27a09b7c-4a5d-469a-a04f-1979a060b64b', 'interplus internet'                     UNION ALL
         SELECT 'mpa.direct-internet',                                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
         SELECT 'mpa.direct internet@direct internet',                   '60c264f6-47ea-44d3-8293-0102737dd211', 'direct internet'                        UNION ALL
         SELECT 'mpa.enove-fibra@enove-solucoes',                        '4ebe0769-f89a-4fa4-adb0-c1094a68b20a', 'enove-fibra'                            UNION ALL
