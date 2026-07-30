@@ -1381,6 +1381,17 @@ function updateCustomDateState() {
   errEl.style.display = invalidRange ? '' : 'none';
   group.dataset.active = (state.period === 'custom' && bothFilled && !invalidRange) ? 'true' : 'false';
 }
+// Ao trocar pra um preset (7d/30d/90d/mês), limpa os campos de data personalizada —
+// senão eles ficam mostrando a data de uma sessão anterior, dando a impressão errada
+// de que aquele intervalo específico é o filtro em uso.
+function clearCustomDateInputs() {
+  state.customStart = '';
+  state.customEnd = '';
+  localStorage.removeItem(LS_CUSTOM_START);
+  localStorage.removeItem(LS_CUSTOM_END);
+  document.getElementById('custom-date-start').value = '';
+  document.getElementById('custom-date-end').value = '';
+}
 function wireFilters() {
   // Botões cumulativos (7d/30d/90d) — limpam o dropdown de mês
   document.querySelectorAll('#period-group button').forEach(b => {
@@ -1392,6 +1403,7 @@ function wireFilters() {
       const sel = document.getElementById('month-select');
       sel.value = '';
       sel.dataset.active = 'false';
+      clearCustomDateInputs();
       updateCustomDateState();
       render();
     });
@@ -1404,6 +1416,7 @@ function wireFilters() {
     state.period = v;
     localStorage.setItem(LS_PERIOD, state.period);
     e.target.dataset.active = 'true';
+    clearCustomDateInputs();
     updateCustomDateState();
     render();
   });
