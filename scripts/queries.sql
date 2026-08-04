@@ -145,7 +145,7 @@ ORDER BY i.invest DESC NULLS LAST;
 -- têm suas linhas de config Google com status='disabled', mesmo tendo
 -- investimento real rodando — por isso sumiam do funil de cliques.
 -- Decisão do usuário: ignorar o status e contar mesmo assim.
--- Mantido: deleted_at IS NULL AND utm_source = 'google'.
+-- Mantido na epoca: deleted_at IS NULL (removido depois em 04/08 — ver CTE config).
 --
 -- CHANGELOG 2026-07-01 (2): adicionada CTE `clicks` pra popular o campo
 -- `cliques` (cliques de anúncio, distinto de `sessoes`). O join correto
@@ -175,7 +175,17 @@ WITH periodo AS (
 config AS (
     SELECT DISTINCT partnership_id, utm_campaign, campaign_name
     FROM backoffice.db_backoffice_lead_agency_paid_media_config
-    WHERE deleted_at IS NULL AND utm_source = 'google'
+    -- CHANGELOG 2026-08-04: removido `deleted_at IS NULL`. Mesma classe de bug do
+    -- `status='enabled'` (fix de 01/07): campanha antiga do partner tem a linha de
+    -- config soft-deletada quando é substituída, e aí TODO o histórico dela some do
+    -- funil — cliques, sessões, clickoff, redirect, leads e vendas. Caso real: Loga,
+    -- campanha `cpc-pesquisa-loga-internet` (79 leads / 38 vendas só em jun/26) ficava
+    -- invisível; jun aparecia com 57 leads/21 vendas em vez de 136/59, e mai/26 zerava
+    -- as etapas do funil Google inteiras. Validado: incluindo as deletadas, a atribuição
+    -- por campanha bate 100% com a atribuição por partner_id_partner em mai/jun/jul/ago
+    -- (306/133, 219/85, 265/118, 18/4). Sem risco de dupla contagem: nenhum utm_campaign
+    -- aparece em mais de um partnership_id, mesmo incluindo as linhas deletadas.
+    WHERE utm_source = 'google'
 ),
 clicks AS (
     SELECT cf.partnership_id, SUM(g.clicks) AS cliques
@@ -479,7 +489,17 @@ pid AS (SELECT DISTINCT partnership_id, id_mp FROM semanas),
 config_g AS (
     SELECT DISTINCT partnership_id, utm_campaign, campaign_name
     FROM backoffice.db_backoffice_lead_agency_paid_media_config
-    WHERE deleted_at IS NULL AND utm_source = 'google'
+    -- CHANGELOG 2026-08-04: removido `deleted_at IS NULL`. Mesma classe de bug do
+    -- `status='enabled'` (fix de 01/07): campanha antiga do partner tem a linha de
+    -- config soft-deletada quando é substituída, e aí TODO o histórico dela some do
+    -- funil — cliques, sessões, clickoff, redirect, leads e vendas. Caso real: Loga,
+    -- campanha `cpc-pesquisa-loga-internet` (79 leads / 38 vendas só em jun/26) ficava
+    -- invisível; jun aparecia com 57 leads/21 vendas em vez de 136/59, e mai/26 zerava
+    -- as etapas do funil Google inteiras. Validado: incluindo as deletadas, a atribuição
+    -- por campanha bate 100% com a atribuição por partner_id_partner em mai/jun/jul/ago
+    -- (306/133, 219/85, 265/118, 18/4). Sem risco de dupla contagem: nenhum utm_campaign
+    -- aparece em mais de um partnership_id, mesmo incluindo as linhas deletadas.
+    WHERE utm_source = 'google'
 ),
 config_m AS (
     SELECT DISTINCT partnership_id, campaign_name
@@ -690,7 +710,17 @@ WITH periodo AS (
 config AS (
     SELECT DISTINCT partnership_id, utm_campaign, campaign_name
     FROM backoffice.db_backoffice_lead_agency_paid_media_config
-    WHERE deleted_at IS NULL AND utm_source = 'google'
+    -- CHANGELOG 2026-08-04: removido `deleted_at IS NULL`. Mesma classe de bug do
+    -- `status='enabled'` (fix de 01/07): campanha antiga do partner tem a linha de
+    -- config soft-deletada quando é substituída, e aí TODO o histórico dela some do
+    -- funil — cliques, sessões, clickoff, redirect, leads e vendas. Caso real: Loga,
+    -- campanha `cpc-pesquisa-loga-internet` (79 leads / 38 vendas só em jun/26) ficava
+    -- invisível; jun aparecia com 57 leads/21 vendas em vez de 136/59, e mai/26 zerava
+    -- as etapas do funil Google inteiras. Validado: incluindo as deletadas, a atribuição
+    -- por campanha bate 100% com a atribuição por partner_id_partner em mai/jun/jul/ago
+    -- (306/133, 219/85, 265/118, 18/4). Sem risco de dupla contagem: nenhum utm_campaign
+    -- aparece em mais de um partnership_id, mesmo incluindo as linhas deletadas.
+    WHERE utm_source = 'google'
 ),
 clicks AS (
     -- impressoes adicionada 2026-07-09: alimenta só o payload da análise IA
