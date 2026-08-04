@@ -699,17 +699,24 @@ def _gargalo_relevante(g):
 
 def _escada(liq, leads, vendas, cac, cpl, leads_7d, dias, dias_desde_ultimo_investimento):
     """A escada de julgamento: para no primeiro degrau que o dado sustenta."""
+    # achado real 2026-08-04 (Unifique): quando o resíduo da janela móvel de 30d
+    # zera de vez (liq chega a 0, não só "baixo"), a conta continua tão pausada
+    # quanto estava com liq>0 — só que sem esse sinal ela caía direto no
+    # "sem_base" genérico (pra conta que nunca teve atividade), diferente do que
+    # o histórico da conta e o bom senso diziam. dias_desde_ultimo_investimento
+    # não depende de liq>0, então checa isso ANTES do fallback sem_base.
+    if (not leads and not leads_7d and dias_desde_ultimo_investimento is not None
+            and dias_desde_ultimo_investimento > META["PAUSA_DIAS"]):
+        return ("pausada",
+                f"sem investimento novo há {dias_desde_ultimo_investimento} dias — a campanha "
+                f"não está mais rodando" + (" (resíduo da janela móvel já zerou)" if not liq
+                                            else ", o valor em 30d é resíduo da janela móvel"),
+                "nenhuma")
     if not liq and not leads:
         return "sem_base", "sem investimento nem lead em 30d", "nenhuma"
     if dias < META["RAMP_DIAS"]:
         return "ramp", f"conta com {dias} dias de dados (ramp de {META['RAMP_DIAS']})", "ramp"
     if liq > 0 and not leads and not leads_7d:
-        if (dias_desde_ultimo_investimento is not None
-                and dias_desde_ultimo_investimento > META["PAUSA_DIAS"]):
-            return ("pausada",
-                    f"sem investimento novo há {dias_desde_ultimo_investimento} dias — o "
-                    f"valor em 30d é resíduo da janela móvel, a campanha não está mais rodando",
-                    "nenhuma")
         return "dado_suspeito", "investimento em 30d sem nenhum lead em 7d e 30d", "nenhuma"
     if vendas >= META["MIN_VENDAS"] and cac is not None:
         if cac <= META["CAC_IDEAL"]:
