@@ -35,6 +35,7 @@ responseSchema.
 import json
 import os
 import re
+import sys
 import time
 from collections import defaultdict
 from datetime import date, timedelta
@@ -1548,7 +1549,18 @@ def run(context, cutoff_dt, repo_root):
     diag = call_stage1(payload, cover, anterior)
     avisos, fatais = validar(triagem, diag, None)
     if fatais:
-        raise RuntimeError("estágio 1 reprovou na validação: " + " · ".join(fatais))
+        # 1 retry: falha de validação no estágio 1 costuma ser o modelo
+        # desobedecendo a instrução de copiar o status da triagem numa única
+        # resposta (ruído da chamada, não do payload) — achado real 2026-08-04.
+        # Acontece antes de qualquer envio ao Slack, então não há risco de
+        # mensagem duplicada.
+        print("Aviso: estágio 1 reprovou na validação (" + " · ".join(fatais)
+              + ") — tentando de novo.", file=sys.stderr)
+        diag = call_stage1(payload, cover, anterior)
+        avisos, fatais = validar(triagem, diag, None)
+        if fatais:
+            raise RuntimeError("estágio 1 reprovou na validação (após retry): "
+                                + " · ".join(fatais))
 
     comparativo = payload.get("comparativo_semana_vs_semana") or {}
     texto = call_stage2(diag, cover, anterior, comparativo.get("portfolio"))
