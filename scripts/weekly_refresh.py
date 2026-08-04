@@ -269,16 +269,22 @@ def normalize_fm_row(r):
 
 
 def agg_daily(rows, d_ini, d_fim, pkey):
-    agg = defaultdict(lambda: defaultdict(int))
+    # CHANGELOG 2026-08-04: acumula em float e arredonda só no fim. Antes somava
+    # int(valor) dia a dia, e int() TRUNCA — o erro não se cancelava, era sempre
+    # pra baixo (~R$0,50/dia/canal). Direct em mai/26 aparecia com líquido 4.723
+    # contra 4.746 do mart; the fiber (12 dias) e interplus (8 dias) erravam R$4.
+    # Pior: o card do mês discordava do array diário do próprio dashboard, que já
+    # usava round() (ver build_compact_daily).
+    agg = defaultdict(lambda: defaultdict(float))
     for r in rows:
         if d_ini <= r["dia"] <= d_fim:
             k = (r["id_mp"], r["canal"])
-            agg[k]["bruto"] += int(r.get("bruto") or 0)
-            agg[k]["cashback"] += int(r.get("cashback") or 0)
-            agg[k]["liquido"] += int(r.get("liquido") or 0)
+            agg[k]["bruto"] += float(r.get("bruto") or 0)
+            agg[k]["cashback"] += float(r.get("cashback") or 0)
+            agg[k]["liquido"] += float(r.get("liquido") or 0)
     return [{"period_key": pkey, "id_mp": k[0], "canal": k[1],
-             "bruto": v["bruto"], "cashback": v["cashback"], "liquido": v["liquido"]}
-            for k, v in agg.items() if v["bruto"] != 0 or v["liquido"] != 0]
+             "bruto": round(v["bruto"]), "cashback": round(v["cashback"]), "liquido": round(v["liquido"])}
+            for k, v in agg.items() if round(v["bruto"]) != 0 or round(v["liquido"]) != 0]
 
 
 # ── Slack ─────────────────────────────────────────────────────────────────
