@@ -5,7 +5,7 @@
    "status_geral": "ok",
    "eixo_principal": "saudavel",
    "canal_critico": "meta",
-   "diagnostico": "O CAC de 30 dias está saudável em R$107.74. Na visão semanal, o CAC da conta caiu 39.9% para R$68.88, puxado pelo excelente desempenho do Google, que registrou um CAC de R$34.50. O Meta, por outro lado, não gerou nenhum lead na semana, acendendo um alerta para o canal. A melhora expressiva no Google veio de um salto de 21.4pp na conversão de lead para venda, compensando a queda no volume de cliques.",
+   "diagnostico": "O CAC de 30 dias está saudável em R$107.74. Na visão semanal, o CAC da conta caiu 39.9% para R$68.88, puxado pelo excelente desempenho do Google, que registrou um CAC de R$34.50. O Meta, por outro lado, não gerou nenhum lead na semana, acendendo um alerta para o canal. A melhora expressiva no Google veio de um salto de 24.2pp na conversão de lead para venda, compensando o aumento de 16.4% no CPL.",
    "cadeia_causal": "O aumento de 24.2pp na taxa de conversão de lead para venda na conta destravou o funil comercial. Com o fechamento muito mais eficiente por parte do provedor, o CAC semanal despencou 39.9% para R$68.88, mesmo com o CPL subindo 16.4% no período. O tráfego gerado converteu em vendas com alta eficácia.",
    "acao_semana": "Manter a estrutura atual das campanhas no Google, que estão entregando um resultado excelente. No Meta, investigar imediatamente a queda abrupta para zero leads na semana, revisando a etapa de cliques para chat_start e o funcionamento do bot.",
    "confianca": "alta",
@@ -54,17 +54,17 @@
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "O CAC caiu 39.9% puxado por um forte aumento na conversão de lead para venda no Google.",
+   "movimento_semanal": "O CAC caiu 39.9% puxado pela melhora na conversão de lead para venda no Google, enquanto o Meta zerou em leads.",
    "como_validar": "Acompanhar a taxa de conversão de lead para venda nos próximos 7 dias para confirmar se o novo patamar se sustenta. Verificar diariamente se o Meta volta a gerar leads após a revisão.",
    "hipotese": "O alinhamento comercial surtiu efeito, melhorando significativamente a abordagem e o fechamento das vendas. No Meta, uma possível fadiga de criativo ou problema técnico no link do WhatsApp zerou a entrada de novos leads na semana.",
-   "mudou_vs_semana_anterior": "a ação recomendada foi executada e o indicador respondeu"
+   "mudou_vs_semana_anterior": "a ação não parece ter sido executada"
   },
   {
    "partner": "the fiber internet",
    "status_geral": "ok",
    "eixo_principal": "saudavel",
    "canal_critico": "nenhum",
-   "diagnostico": "O CAC de 30 dias segue saudável em R$145.25. Na semana, o CAC da conta caiu 6.2% para R$122.0 e o CPL reduziu 24.9% para R$40.67. O Google continua sustentando a operação da conta sozinho, enquanto o Meta segue completamente inoperante, sem gerar nenhum lead. A queda no CPL da conta foi fundamental para compensar a redução de 8.4pp na conversão de lead para venda e manter o CAC em trajetória de queda.",
+   "diagnostico": "O CAC de 30 dias segue saudável em R$145.25. Na semana, o CAC da conta caiu 6.2% para R$122.00 e o CPL reduziu 24.9% para R$40.67. O Google continua sustentando a operação da conta sozinho, enquanto o Meta segue completamente inoperante, sem gerar nenhum lead. A queda no CPL da conta foi fundamental para compensar a redução de 8.4pp na conversão de lead para venda e manter o CAC em trajetória de queda.",
    "cadeia_causal": "A redução expressiva de 47.7% no CPC da conta barateou significativamente a captação de tráfego, derrubando o CPL em 24.9%. Esse topo de funil mais barato e volumoso absorveu a queda de 8.4pp na taxa de conversão de lead para venda, mantendo o CAC semanal em queda e garantindo a eficiência da conta.",
    "acao_semana": "Revisar urgentemente o fluxo do Meta, especificamente a etapa de redirect para leads, que continua sem gerar conversões. No Google, manter as campanhas ativas e monitorar os lances para aproveitar o leilão favorável.",
    "confianca": "alta",
@@ -119,7 +119,7 @@
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "O CAC caiu 6.2% impulsionado pela queda no CPL, que compensou a piora no fechamento de vendas.",
+   "movimento_semanal": "O CAC caiu 6.2% devido à redução do CPL, que compensou a piora na conversão de leads em vendas.",
    "como_validar": "Monitorar de perto se o Meta volta a gerar leads nos próximos 7 dias após a correção do fluxo de redirecionamento. Acompanhar se o CPC do Google se mantém no patamar mais baixo.",
    "hipotese": "O Meta continua com atrito severo ou erro técnico no fluxo final de conversão. O leilão do Google ficou consideravelmente mais barato, reduzindo o CPL e garantindo a rentabilidade da conta mesmo com piora no fechamento.",
    "mudou_vs_semana_anterior": "a ação não parece ter sido executada"
@@ -129,8 +129,8 @@
    "status_geral": "ok",
    "eixo_principal": "funil",
    "canal_critico": "nenhum",
-   "diagnostico": "O CAC de 30 dias está dentro da meta em R$100.20, mas a conta gerou apenas 3 vendas na semana, ficando sem base para leitura de CAC semanal. O Meta continua como um dado suspeito grave: consumiu R$168 nos últimos 30 dias sem gerar absolutamente nenhum lead. O Google é o único canal sustentando a operação, beneficiado por uma queda de 40.4% no CPC na semana, o que ajudou a gerar 5 leads. O volume total, no entanto, ainda é baixo para estabilizar as métricas.",
-   "cadeia_causal": "A inoperância total do Meta, que não gerou leads em 30 dias, sobrecarrega a responsabilidade do Google. No Google, a queda de 40.4% no CPC barateou o tráfego e ajudou a gerar 5 leads na semana, mas o volume agregado da conta ainda é insuficiente para garantir estabilidade no fechamento de vendas.",
+   "diagnostico": "O CAC de 30 dias está dentro da meta em R$100.20, mas a conta gerou apenas 3 vendas na semana, ficando sem base para leitura de CAC semanal. O Meta continua inoperante, sem gerar nenhum lead. O Google é o único canal sustentando a operação, beneficiado por uma queda de 40.4% no CPC na semana, o que ajudou a gerar 5 leads. O CPL da conta ficou em R$45.40, mas o volume total ainda é baixo para estabilizar as métricas.",
+   "cadeia_causal": "A inoperância total do Meta sobrecarrega a responsabilidade do Google. No Google, a queda de 40.4% no CPC barateou o tráfego e ajudou a gerar 5 leads na semana, mas o volume agregado da conta ainda é insuficiente para garantir estabilidade no fechamento de vendas e formar base para o CAC semanal.",
    "acao_semana": "Auditar imediatamente o rastreamento e o bot do WhatsApp no Meta, que está consumindo verba sem gerar leads. No Google, manter as campanhas e avaliar uma leve expansão de público para aumentar o volume de entrada.",
    "confianca": "alta",
    "evidencias_citadas": [
@@ -147,32 +147,32 @@
      "canal": "ambos"
     },
     {
-     "metrica": "leads",
-     "valor": "0",
-     "janela": "30d",
-     "canal": "meta"
-    },
-    {
-     "metrica": "investimento_liquido_30d",
-     "valor": "168",
-     "janela": "30d",
-     "canal": "meta"
-    },
-    {
-     "metrica": "cpc_delta_pct",
-     "valor": "-40.4",
+     "metrica": "cpl",
+     "valor": "45.4",
      "janela": "7d",
      "canal": "ambos"
+    },
+    {
+     "metrica": "leads",
+     "valor": "0",
+     "janela": "7d",
+     "canal": "meta"
     },
     {
      "metrica": "leads",
      "valor": "5",
      "janela": "7d",
      "canal": "google"
+    },
+    {
+     "metrica": "cpc_delta_pct",
+     "valor": "-40.4",
+     "janela": "7d",
+     "canal": "ambos"
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "A conta não tem base para CAC semanal (3 vendas), com o Meta gastando sem gerar leads há 30 dias.",
+   "movimento_semanal": "A conta ficou sem base para CAC semanal (3 vendas), com o Meta zerado em leads e o Google puxando o volume.",
    "como_validar": "Verificar diariamente se o Meta volta a registrar leads após a auditoria minuciosa do rastreamento e do bot. Acompanhar o volume de leads do Google nos próximos 7 dias.",
    "hipotese": "O rastreamento do Meta (pixel ou API de conversões) está quebrado, ou o bot do WhatsApp parou de funcionar, impedindo a captação. No Google, o leilão menos competitivo favoreceu o custo por clique.",
    "mudou_vs_semana_anterior": "a ação não parece ter sido executada"
@@ -182,8 +182,8 @@
    "status_geral": "ok",
    "eixo_principal": "saudavel",
    "canal_critico": "meta",
-   "diagnostico": "O CAC de 30 dias está saudável em R$148.08. Na visão semanal, o CAC da conta caiu 21.5% para R$79.50 e o CPL reduziu 36.6% para R$36.69. O Google puxou esse excelente resultado com um CAC de R$47.00. Em contrapartida, o Meta segue em estado crítico, sem gerar vendas na semana e com um CAC de 30 dias alarmante de R$531.33. A queda no CPL geral compensou a redução de 10.9pp na conversão de lead para venda.",
-   "cadeia_causal": "A redução de 24.0% no CPC barateou consideravelmente a captação de tráfego, derrubando o CPL da conta em 36.6%. Esse volume de leads muito mais barato absorveu o impacto negativo da queda de 10.9pp na taxa de fechamento (lead para venda), mantendo o CAC semanal em trajetória de queda. A eficiência do Google foi o motor dessa compensação, mascarando a ineficiência do Meta.",
+   "diagnostico": "O CAC de 30 dias está saudável em R$148.08. Na visão semanal, o CAC da conta caiu 21.5% para R$79.50 e o CPL reduziu 36.6% para R$36.69. O Google puxou esse excelente resultado com um CAC de R$47.00. Em contrapartida, o Meta segue ineficiente, gerando apenas 1 lead na semana. A queda no CPL geral da conta compensou a redução de 10.9pp na conversão de lead para venda, garantindo a melhora do CAC.",
+   "cadeia_causal": "A redução de 24.0% no CPC barateou consideravelmente a captação de tráfego, derrubando o CPL da conta em 36.6%. Esse volume de leads muito mais barato absorveu o impacto negativo da queda de 10.9pp na taxa de fechamento (lead para venda), mantendo o CAC semanal em trajetória de queda. A eficiência do Google foi o motor dessa compensação.",
    "acao_semana": "Pausar ou reestruturar profundamente as campanhas do Meta, que estão com um CAC insustentável e drenando a verba. No Google, manter a estrutura atual que está garantindo a eficiência e a rentabilidade da conta.",
    "confianca": "alta",
    "evidencias_citadas": [
@@ -218,9 +218,15 @@
      "canal": "ambos"
     },
     {
-     "metrica": "cac_30d",
-     "valor": "531.33",
-     "janela": "30d",
+     "metrica": "cac",
+     "valor": "47.0",
+     "janela": "7d",
+     "canal": "google"
+    },
+    {
+     "metrica": "leads",
+     "valor": "1",
+     "janela": "7d",
      "canal": "meta"
     },
     {
@@ -237,18 +243,18 @@
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "O CAC caiu 21.5% impulsionado pela forte redução do CPL, que compensou a piora no fechamento.",
+   "movimento_semanal": "O CAC caiu 21.5% puxado pela redução do CPL no Google, que compensou a piora no fechamento.",
    "como_validar": "Acompanhar se o CAC do Google se mantém baixo nos próximos 7 dias e avaliar o impacto imediato da reestruturação ou pausa do Meta na eficiência geral da conta.",
    "hipotese": "O leilão do Google ficou mais favorável, barateando o clique. No Meta, a segmentação ou os criativos estão atraindo um público altamente desqualificado, gerando leads caros que não convertem em vendas.",
-   "mudou_vs_semana_anterior": "o diagnóstico mudou de eixo"
+   "mudou_vs_semana_anterior": "a ação não parece ter sido executada"
   },
   {
    "partner": "enove-fibra",
    "status_geral": "atencao",
    "eixo_principal": "funil",
    "canal_critico": "meta",
-   "diagnostico": "O CAC de 30 dias está na zona de alerta em R$175.00. Na semana, a conta gerou apenas 2 vendas e 6 leads, perdendo a base mínima para leitura de CAC semanal. O Meta desponta como o canal crítico, com um CAC de 30 dias de R$250.00, enquanto o Google roda dentro da meta (R$118.75). A etapa de cliques para chat_start no Meta sofreu uma queda de 4.8pp na semana, indicando perda de tração nos anúncios.",
-   "cadeia_causal": "A queda de 4.8pp na conversão de cliques para chat_start no Meta, somada ao aumento de 5.1% no CPC da conta, encareceu significativamente o topo de funil. Com esse baixo volume de entrada e tráfego mais caro, a conta gerou apenas 6 leads e 2 vendas, perdendo a base de cálculo semanal. O encarecimento da captação asfixiou o funil comercial, impedindo a diluição dos custos.",
+   "diagnostico": "O CAC de 30 dias está na zona de alerta em R$175.00. Na semana, a conta gerou apenas 2 vendas e 6 leads, perdendo a base mínima para leitura de CAC semanal. O Meta desponta como o canal crítico, com um CAC de 30 dias de R$250.00, enquanto o Google roda dentro da meta. A etapa de cliques para chat_start no Meta sofreu uma queda de 4.8pp na semana, indicando perda de tração nos anúncios. O CPC da conta subiu 5.1%.",
+   "cadeia_causal": "A queda de 4.8pp na conversão de cliques para chat_start no Meta, somada ao aumento de 5.1% no CPC da conta, encareceu significativamente o topo de funil. Com esse baixo volume de entrada e tráfego mais caro, a conta gerou apenas 6 leads e 2 vendas, perdendo a base de cálculo semanal. O encarecimento da captação asfixiou o funil comercial.",
    "acao_semana": "Revisar e trocar urgentemente os criativos do Meta para recuperar a taxa de cliques para chat_start e baratear a entrada. No Google, manter a estrutura atual que segue entregando resultados dentro da meta.",
    "confianca": "media",
    "evidencias_citadas": [
@@ -277,12 +283,6 @@
      "canal": "meta"
     },
     {
-     "metrica": "cac_30d",
-     "valor": "118.75",
-     "janela": "30d",
-     "canal": "google"
-    },
-    {
      "metrica": "cliques>chat_start",
      "valor": "-4.8",
      "janela": "7d",
@@ -296,7 +296,7 @@
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "A conta ficou sem base para CAC semanal devido ao baixo volume de vendas (2), com piora no topo de funil do Meta.",
+   "movimento_semanal": "A conta ficou sem base para CAC semanal (2 vendas), com piora no topo de funil do Meta.",
    "como_validar": "Monitorar a evolução da taxa de cliques para chat_start no Meta nos próximos 7 dias após a implementação dos novos criativos, buscando a retomada do volume.",
    "hipotese": "Ocorreu uma fadiga rápida dos criativos no Meta, reduzindo o engajamento inicial e encarecendo o tráfego. O aumento do CPC geral contribuiu para a asfixia do funil, diminuindo o volume de leads e vendas.",
    "mudou_vs_semana_anterior": "a ação foi executada e o indicador NÃO respondeu"
@@ -306,8 +306,8 @@
    "status_geral": "pausada",
    "eixo_principal": "funil",
    "canal_critico": "nenhum",
-   "diagnostico": "A conta está pausada há 33 dias, sem receber nenhum investimento novo. O resíduo da janela móvel já zerou completamente, resultando em zero impressões, cliques, leads e vendas no período recente. Não há dados de performance para diagnosticar. A prioridade é entender o status da parceria e se há previsão de retomada das campanhas. Qualquer análise de métricas de funil ou custos de aquisição é inviável neste momento, pois a interrupção do fluxo de mídia paralisou toda a operação. O foco deve ser exclusivamente administrativo e de relacionamento com o parceiro.",
-   "cadeia_causal": "A interrupção total do investimento paralisou a entrega dos anúncios. Sem veiculação, não há geração de tráfego, o que seca imediatamente o funil de conversão, resultando na ausência absoluta de leads e vendas durante todo o período de pausa da conta. Esta é uma relação de causa e efeito direta e administrativa, sem envolvimento de variáveis de performance de mídia ou comportamento do usuário.",
+   "diagnostico": "A conta está pausada há 33 dias, sem receber nenhum investimento novo. O resíduo da janela móvel já zerou completamente, resultando em zero impressões, cliques, leads e vendas no período recente. Não há dados de performance para diagnosticar. A prioridade é entender o status da parceria e se há previsão de retomada das campanhas. O foco deve ser exclusivamente administrativo e de relacionamento com o parceiro.",
+   "cadeia_causal": "A interrupção total do investimento paralisou a entrega dos anúncios. Sem veiculação, não há geração de tráfego, o que seca imediatamente o funil de conversão, resultando na ausência absoluta de leads e vendas durante todo o período de pausa da conta. Esta é uma relação de causa e efeito direta e administrativa.",
    "acao_semana": "Contatar o parceiro para entender o motivo da pausa de 33 dias. Caso decidam retornar, verificar o orçamento disponível e revisar as configurações da campanha e faturamento antes de qualquer reativação.",
    "confianca": "alta",
    "evidencias_citadas": [
@@ -331,7 +331,7 @@
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "A conta não registrou movimentação na semana por estar pausada há 33 dias.",
+   "movimento_semanal": "A conta não registrou movimentação por estar pausada há 33 dias.",
    "como_validar": "Confirmar o status do contrato com o parceiro e checar a regularidade da conta de anúncios (saldo e faturamento) antes de religar as campanhas ativas.",
    "hipotese": "A campanha foi pausada por solicitação direta do parceiro devido a reestruturações internas, ou houve um bloqueio administrativo nas plataformas por falta de pagamento ou expiração de cartão de crédito.",
    "mudou_vs_semana_anterior": "a ação não parece ter sido executada"
@@ -341,7 +341,7 @@
    "status_geral": "alarme",
    "eixo_principal": "cac",
    "canal_critico": "google",
-   "diagnostico": "O CAC de 30 dias está em estado crítico, atingindo R$319.62. Na semana, a conta não gerou nenhuma venda, ficando sem base para cálculo de CAC semanal, enquanto o CPL subiu 6.0% para R$30.17. O Google desponta como o canal crítico (CAC 30d de R$203.57), sofrendo com um aumento expressivo de 49.8% no CPC semanal. Para agravar, a conversão de lead para venda despencou 23.5pp, zerando os fechamentos.",
+   "diagnostico": "O CAC de 30 dias está em estado crítico, atingindo R$319.62. Na semana, a conta não gerou nenhuma venda, ficando sem base para cálculo de CAC semanal, enquanto o CPL subiu 6.0% para R$30.17. O Google desponta como o canal crítico, sofrendo com um aumento expressivo de 49.8% no CPC semanal. Para agravar a situação, a conversão de lead para venda despencou 23.5pp, zerando os fechamentos da semana.",
    "cadeia_causal": "O aumento drástico de 49.8% no CPC do Google encareceu fortemente o tráfego de entrada. Somado a isso, a queda abrupta de 23.5pp na taxa de conversão de lead para venda zerou os fechamentos da semana. Esse duplo impacto no topo e no fundo do funil deixou a conta sem base de CAC e consolidou o estado de alarme no período.",
    "acao_semana": "Revisar imediatamente os lances e as segmentações no Google para conter a alta agressiva do CPC. Alinhar com urgência com a equipe comercial sobre a queda a zero nas vendas para entender a qualidade dos leads.",
    "confianca": "alta",
@@ -371,12 +371,6 @@
      "canal": "ambos"
     },
     {
-     "metrica": "cac_30d",
-     "valor": "203.57",
-     "janela": "30d",
-     "canal": "google"
-    },
-    {
      "metrica": "cpc_delta_pct",
      "valor": "49.8",
      "janela": "7d",
@@ -390,10 +384,10 @@
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "A conta zerou em vendas na semana, prejudicada por um forte aumento no CPC do Google e queda no fechamento.",
+   "movimento_semanal": "A conta zerou em vendas na semana, prejudicada pelo aumento no CPC do Google e queda no fechamento.",
    "como_validar": "Acompanhar diariamente o CPC do Google para confirmar se os ajustes de lance surtiram efeito, e monitorar a retomada da taxa de lead para venda nos próximos 7 dias.",
    "hipotese": "O leilão do Google encareceu subitamente devido a novos concorrentes ou sazonalidade não mapeada. A queda a zero nas vendas indica que os leads gerados estavam muito desqualificados ou houve falha no atendimento.",
-   "mudou_vs_semana_anterior": "o diagnóstico mudou de eixo"
+   "mudou_vs_semana_anterior": "a ação não parece ter sido executada"
   },
   {
    "partner": "ativa-telecom",
@@ -443,7 +437,7 @@
     }
    ],
    "risco_churn": false,
-   "movimento_semanal": "A conta ficou sem base para CAC semanal devido ao baixo volume de leads, agravado pelo gargalo na conversão final.",
+   "movimento_semanal": "A conta ficou sem base para CAC semanal (2 vendas), agravada pelo aumento do CPC e gargalo na conversão final.",
    "como_validar": "Monitorar rigorosamente a evolução da taxa de redirect para leads nos próximos 7 dias após a implementação das correções na landing page e no link do WhatsApp.",
    "hipotese": "O formulário da landing page no Google está muito longo ou apresenta falhas técnicas intermitentes. No Meta, o link de redirecionamento para o WhatsApp pode estar quebrado ou a mensagem inicial afasta o usuário.",
    "mudou_vs_semana_anterior": "a ação não parece ter sido executada"
