@@ -1332,8 +1332,18 @@ def _post(body, tries=3):
             print(f"Aviso: Gemini devolveu {r.status_code} (tentativa {i + 1}/{tries}).")
             continue
         r.raise_for_status()
-        parts = r.json()["candidates"][0]["content"]["parts"]
-        return "".join(p.get("text", "") for p in parts)
+        cand = r.json()["candidates"][0]
+        parts = cand.get("content", {}).get("parts") or []
+        txt = "".join(p.get("text", "") for p in parts if not p.get("thought"))
+        if not txt.strip():
+            # resposta sem texto útil. O caso real (2026-08-04, estágio 2) é
+            # finishReason=MAX_TOKENS: no Gemini 3 o pensamento conta contra
+            # maxOutputTokens, então o modelo pode gastar todo o teto pensando e
+            # devolver zero texto — indistinguível de falha silenciosa sem isso.
+            raise RuntimeError(
+                f"Gemini devolveu resposta sem texto (finishReason="
+                f"{cand.get('finishReason')}, usage={r.json().get('usageMetadata')})")
+        return txt
     raise last
 
 
@@ -1378,9 +1388,12 @@ def call_stage2(diag, cover, diag_anterior, comparativo_portfolio=None):
               .replace("{comparativo_portfolio}",
                        json.dumps(comparativo_portfolio, ensure_ascii=False, separators=(",", ":"))
                        if comparativo_portfolio else "(sem dado suficiente pra comparar semanas)"))
+    # maxOutputTokens igual ao do estágio 1: no Gemini 3 o pensamento conta
+    # contra esse teto e thinkingBudget não o limita de forma confiável, então
+    # com 32768 o modelo estourava pensando e devolvia texto vazio (2026-08-04).
     return _post({
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.5, "maxOutputTokens": 32768,
+        "generationConfig": {"temperature": 0.5, "maxOutputTokens": 65536,
                              "thinkingConfig": {"thinkingBudget": 2048}},
     })
 
@@ -1573,9 +1586,17 @@ def run(context, cutoff_dt, repo_root):
     texto = call_stage2(diag, cover, anterior, comparativo.get("portfolio"))
     blocos = parse_blocos(texto)
     a2, f2 = validar(triagem, diag, blocos)
-    avisos += a2
     if f2:
-        raise RuntimeError("estágio 2 reprovou na validação: " + " · ".join(f2))
+        # mesmo racional do retry do estágio 1: ainda antes do Slack.
+        print("Aviso: estágio 2 reprovou na validação (" + " · ".join(f2)
+              + ") — tentando de novo.", file=sys.stderr)
+        texto = call_stage2(diag, cover, anterior, comparativo.get("portfolio"))
+        blocos = parse_blocos(texto)
+        a2, f2 = validar(triagem, diag, blocos)
+        if f2:
+            raise RuntimeError("estágio 2 reprovou na validação (após retry): "
+                                + " · ".join(f2))
+    avisos += a2
 
     for b in ("pareceres", "recomendacoes", "leitura_portfolio"):
         blocos[b] = _strip_emoji(sanitize(blocos[b]))
